@@ -58,7 +58,7 @@ def predict(request: FraudRequest):
 
     start = time.time()
 
-    TOTAL_REQUESTS.inc()
+    REQUEST_COUNT.inc()
 
     values = [
 
