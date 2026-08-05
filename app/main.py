@@ -22,56 +22,6 @@ app = FastAPI(
 )
 
 ############################################################
-# Prometheus Metrics
-############################################################
-
-TOTAL_REQUESTS = Counter(
-    "prediction_requests_total",
-    "Total Prediction Requests"
-)
-
-FRAUD_PREDICTIONS = Counter(
-    "fraud_predictions_total",
-    "Total Fraud Predictions"
-)
-
-NON_FRAUD_PREDICTIONS = Counter(
-    "nonfraud_predictions_total",
-    "Total Non Fraud Predictions"
-)
-
-PREDICTION_LATENCY = Histogram(
-    "prediction_latency_seconds",
-    "Prediction Latency"
-)
-
-MODEL_ACCURACY = Gauge(
-    "model_accuracy",
-    "Current Model Accuracy"
-)
-
-DATA_DRIFT_SCORE = Gauge(
-    "data_drift_score",
-    "Current Data Drift Score"
-)
-
-MODEL_DRIFT_SCORE = Gauge(
-    "model_drift_score",
-    "Current Model Drift Score"
-)
-
-############################################################
-# Initial Values
-############################################################
-
-MODEL_ACCURACY.set(0.999)
-
-DATA_DRIFT_SCORE.set(0.02)
-
-MODEL_DRIFT_SCORE.set(0.01)
-
-
-############################################################
 # Home
 ############################################################
 
