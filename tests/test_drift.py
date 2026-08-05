@@ -3,11 +3,21 @@ from scipy.stats import ks_2samp
 
 
 def calculate_drift(reference, current, threshold=0.05):
+    """
+    Detect drift using the Kolmogorov-Smirnov test.
 
-    statistic, p_value = ks_2samp(reference, current)
+    Returns:
+        bool: True if drift is detected, otherwise False.
+    """
+    _, p_value = ks_2samp(reference, current)
 
-    return p_value < threshold
+    # Convert NumPy bool to Python bool
+    return bool(p_value < threshold)
 
+
+# ==========================
+# Unit Tests
+# ==========================
 
 def test_no_drift():
 
@@ -32,7 +42,6 @@ def test_drift_detected():
 def test_same_distribution():
 
     reference = np.arange(100)
-
     current = np.arange(100)
 
     assert calculate_drift(reference, current) is False
@@ -41,7 +50,6 @@ def test_same_distribution():
 def test_different_distribution():
 
     reference = np.arange(100)
-
     current = np.arange(100) + 100
 
     assert calculate_drift(reference, current) is True
