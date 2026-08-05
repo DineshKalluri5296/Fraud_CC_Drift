@@ -3,7 +3,12 @@ import json
 import joblib
 import numpy as np
 from pathlib import Path
-from prometheus_client import Counter, Histogram, Gauge
+from app.metrics import (
+    PREDICTION_LATENCY,
+    FRAUD_PREDICTIONS,
+    NON_FRAUD_PREDICTIONS,
+    MODEL_ACCURACY,
+)
 
 # =====================================================
 # Load Model
@@ -18,30 +23,6 @@ model = joblib.load(MODEL_PATH)
 scaler = None
 if SCALER_PATH.exists():
     scaler = joblib.load(SCALER_PATH)
-
-# =====================================================
-# Prometheus Metrics
-# =====================================================
-
-PREDICTION_LATENCY = Histogram(
-    "prediction_latency_seconds",
-    "Prediction latency in seconds"
-)
-
-FRAUD_PREDICTIONS = Counter(
-    "fraud_predictions_total",
-    "Total Fraud Predictions"
-)
-
-NON_FRAUD_PREDICTIONS = Counter(
-    "nonfraud_predictions_total",
-    "Total Non-Fraud Predictions"
-)
-
-MODEL_ACCURACY = Gauge(
-    "model_accuracy",
-    "Current Model Accuracy"
-)
 
 # =====================================================
 # Load Accuracy
