@@ -63,4 +63,4 @@ jobs:
 
       - name: Verify Deployment
         run: |
-          kubectl rollout status deployment/$HELM_RELEASE -n fraud
+          kubectl rollout status deployment/fraud-api-fraud-chart -n fraud
