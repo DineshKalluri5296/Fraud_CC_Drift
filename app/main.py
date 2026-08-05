@@ -1,16 +1,20 @@
 from fastapi import FastAPI
 from fastapi.responses import Response
-
 import time
-
 from prometheus_client import (
-    Counter,
-    Gauge,
-    Histogram,
     generate_latest,
-    CONTENT_TYPE_LATEST
+    CONTENT_TYPE_LATEST,
 )
 
+from app.metrics import (
+    REQUEST_COUNT,
+    FRAUD_PREDICTIONS,
+    NON_FRAUD_PREDICTIONS,
+    PREDICTION_LATENCY,
+    MODEL_ACCURACY,
+    DATA_DRIFT_SCORE,
+    MODEL_DRIFT_SCORE,
+)
 from app.schema import FraudRequest
 from app.predict import predict_fraud
 
