@@ -57,7 +57,7 @@ jobs:
         run: |
           helm upgrade --install \
           $HELM_RELEASE \
-          ./helm/fraud-chart \
+          ./heml/fraud-chart \
           --namespace fraud \
           --create-namespace
 
