@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+
+metadata:
+
+  name: {{ include "fraud-chart.fullname" . }}
+
+data:
+
+  MODEL_PATH: "{{ .Values.config.MODEL_PATH }}"
+
+  LOG_LEVEL: "{{ .Values.config.LOG_LEVEL }}"

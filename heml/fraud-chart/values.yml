@@ -1,0 +1,95 @@
+# Replica Count
+replicaCount: 2
+
+# Docker Image
+image:
+  repository: your-account-id.dkr.ecr.us-east-1.amazonaws.com/fraud-api
+  tag: latest
+  pullPolicy: Always
+
+# Service
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 8000
+
+# Container Port
+containerPort: 8000
+
+# Namespace
+namespace: fraud
+
+# Resources
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+# Autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+# Prometheus
+serviceMonitor:
+  enabled: true
+  interval: 15s
+  scrapeTimeout: 10s
+
+# ConfigMap Values
+config:
+  MODEL_PATH: "/app/model/model.pkl"
+  LOG_LEVEL: "INFO"
+
+# Secret Values
+secret:
+  AWS_REGION: us-east-1
+
+# Ingress
+ingress:
+  enabled: false
+  className: nginx
+
+  annotations: {}
+
+  hosts:
+    - host: fraud.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+  tls: []
+
+# Service Account
+serviceAccount:
+  create: true
+  name: ""
+
+# Pod Labels
+podLabels: {}
+
+# Pod Annotations
+podAnnotations: {}
+
+# Node Selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Image Pull Secrets
+imagePullSecrets: []
+
+# Name Override
+nameOverride: ""
+
+fullnameOverride: ""

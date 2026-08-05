@@ -1,0 +1,47 @@
+# Version Control
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+
+# Kubernetes
+*.yaml.bak
+
+# Helm Packages
+*.tgz
+
+# Documentation
+README.md
+
+# Tests
+tests/
+
+# Artifacts
+artifacts/
+
+# Docker
+Dockerfile
+
+# Temporary
+tmp/
+temp/

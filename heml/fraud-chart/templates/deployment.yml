@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: {{ include "fraud-chart.fullname" . }}
+
+  labels:
+    {{- include "fraud-chart.labels" . | nindent 4 }}
+
+spec:
+
+  replicas: {{ .Values.replicaCount }}
+
+  selector:
+    matchLabels:
+      {{- include "fraud-chart.selectorLabels" . | nindent 6 }}
+
+  template:
+
+    metadata:
+      labels:
+        {{- include "fraud-chart.selectorLabels" . | nindent 8 }}
+
+    spec:
+
+      serviceAccountName: {{ include "fraud-chart.fullname" . }}
+
+      containers:
+
+        - name: fraud-api
+
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          ports:
+            - containerPort: {{ .Values.containerPort }}
+
+          env:
+
+            - name: MODEL_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "fraud-chart.fullname" . }}
+                  key: MODEL_PATH
+
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "fraud-chart.fullname" . }}
+                  key: LOG_LEVEL
+
+            - name: AWS_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fraud-chart.fullname" . }}
+                  key: AWS_REGION
+
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.containerPort }}
+            initialDelaySeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.containerPort }}
+            initialDelaySeconds: 30

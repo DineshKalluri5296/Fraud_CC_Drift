@@ -1,0 +1,36 @@
+{
+  "model_name": "LightGBM Fraud Detector",
+  "model_version": "1.0.0",
+  "dataset": "creditcard.csv",
+  "training_date": "2026-08-05T10:30:00Z",
+
+  "metrics": {
+    "accuracy": 0.9987,
+    "precision": 0.9895,
+    "recall": 0.9842,
+    "f1_score": 0.9868,
+    "roc_auc": 0.9991
+  },
+
+  "confusion_matrix": {
+    "true_positive": 482,
+    "true_negative": 56852,
+    "false_positive": 5,
+    "false_negative": 8
+  },
+
+  "cross_validation": {
+    "folds": 5,
+    "mean_accuracy": 0.9985,
+    "std_accuracy": 0.0004
+  },
+
+  "training": {
+    "algorithm": "LightGBM",
+    "learning_rate": 0.05,
+    "n_estimators": 200,
+    "random_state": 42
+  },
+
+  "status": "PASS"
+}

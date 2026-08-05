@@ -1,0 +1,26 @@
+apiVersion: v2
+name: fraud-chart
+description: Helm chart for Fraud Detection MLOps Application
+type: application
+
+version: 0.1.0
+appVersion: "1.0.0"
+
+keywords:
+  - fraud
+  - mlops
+  - fastapi
+  - kubernetes
+  - aws
+  - eks
+
+home: https://github.com/yourusername/fraud-creditcard
+
+sources:
+  - https://github.com/yourusername/fraud-creditcard
+
+maintainers:
+  - name: Dinesh
+    email: dinesh@example.com
+
+icon: https://raw.githubusercontent.com/helm/helm/main/docs/images/helm-logo.png

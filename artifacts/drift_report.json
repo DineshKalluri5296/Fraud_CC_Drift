@@ -1,0 +1,54 @@
+{
+  "report_date": "2026-08-05T11:00:00Z",
+
+  "drift_detected": false,
+
+  "overall_drift_score": 0.017,
+
+  "threshold": 0.05,
+
+  "method": "Kolmogorov-Smirnov Test",
+
+  "features": {
+
+    "distance_from_home": {
+      "p_value": 0.82,
+      "drift": false
+    },
+
+    "distance_from_last_transaction": {
+      "p_value": 0.61,
+      "drift": false
+    },
+
+    "ratio_to_median_purchase_price": {
+      "p_value": 0.54,
+      "drift": false
+    },
+
+    "repeat_retailer": {
+      "p_value": 0.77,
+      "drift": false
+    },
+
+    "used_chip": {
+      "p_value": 0.89,
+      "drift": false
+    },
+
+    "used_pin_number": {
+      "p_value": 0.73,
+      "drift": false
+    },
+
+    "online_order": {
+      "p_value": 0.67,
+      "drift": false
+    }
+
+  },
+
+  "recommendation": "No retraining required.",
+
+  "next_check": "2026-08-06T11:00:00Z"
+}

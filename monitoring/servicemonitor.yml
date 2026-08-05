@@ -1,0 +1,22 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+
+metadata:
+  name: fraud-api-monitor
+  namespace: monitoring
+
+spec:
+
+  selector:
+    matchLabels:
+      app: fraud-api
+
+  namespaceSelector:
+    matchNames:
+      - fraud
+
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
