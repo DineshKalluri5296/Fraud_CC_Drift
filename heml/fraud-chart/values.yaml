@@ -3,7 +3,7 @@ replicaCount: 2
 
 # Docker Image
 image:
-  repository: your-account-id.dkr.ecr.us-east-1.amazonaws.com/fraud-api
+  repository: 821656895219.dkr.ecr.us-east-1.amazonaws.com/fraud-api
   tag: latest
   pullPolicy: Always
 
