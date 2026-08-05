@@ -30,8 +30,10 @@ def test_predict():
 
     data = response.json()
 
-    assert "prediction" in data
-    assert "probability" in data
+    assert "fraud_prediction" in data
+    assert "fraud_probability" in data
+    assert isinstance(data["fraud_prediction"], int)
+    assert isinstance(data["fraud_probability"], float)
 
 
 def test_invalid_request():
