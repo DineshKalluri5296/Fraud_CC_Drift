@@ -166,13 +166,13 @@ jobs:
         run: |
            python <<EOF
            import json
-             with open("artifacts/data_drift.json") as f:
+           with open("artifacts/data_drift.json") as f:
                 result = json.load(f)
-             if result["data_drift_detected"]:
+           if result["data_drift_detected"]:
                print("Data drift detected")
                exit(1)
-             print("No data drift detected")
-             EOF
+           print("No data drift detected")
+           EOF
 
       # =====================================
       # Evaluate Model
