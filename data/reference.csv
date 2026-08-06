@@ -1,0 +1,17 @@
+import pandas as pd
+data = pd.read_csv("data/card_transdata.csv")
+
+# First 80% = baseline data
+reference = data.sample(
+    frac=0.8,
+    random_state=42
+)
+
+
+reference.to_csv(
+    "data/reference.csv",
+    index=False
+)
+
+
+print("reference.csv created")
