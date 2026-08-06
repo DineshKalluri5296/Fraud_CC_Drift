@@ -1,7 +1,6 @@
-name: Build and Deploy
+name: Deploy
 
 on:
-
   workflow_dispatch:
 
   push:
@@ -10,57 +9,44 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: fraud-api
   CLUSTER_NAME: fraud-cluster
   HELM_RELEASE: fraud-api
 
 jobs:
-
   deploy:
-
     runs-on: ubuntu-latest
 
     steps:
-
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
 
-      - name: Build Docker Image
-        run: |
-          docker build -t $ECR_REPOSITORY -f docker/Dockerfile .
-
-      - name: Tag Image
-        run: |
-          docker tag $ECR_REPOSITORY:latest \
-          ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
-
-      - name: Push Image
-        run: |
-          docker push \
-          ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
+      - name: Install Helm
+        uses: azure/setup-helm@v4
 
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
+          aws eks update-kubeconfig \
+            --region $AWS_REGION \
+            --name $CLUSTER_NAME
 
       - name: Deploy using Helm
         run: |
           helm upgrade --install \
-          $HELM_RELEASE \
-          ./heml/fraud-chart \
-          --namespace fraud \
-          --create-namespace
+            $HELM_RELEASE \
+            ./helm/fraud-chart \
+            --namespace fraud \
+            --create-namespace
 
       - name: Verify Deployment
         run: |
-          kubectl rollout status deployment/fraud-api-fraud-chart -n fraud
+          kubectl rollout status deployment/$HELM_RELEASE -n fraud
