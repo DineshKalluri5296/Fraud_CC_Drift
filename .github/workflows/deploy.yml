@@ -1,8 +1,7 @@
-name: Deploy
+name: Deploy Fraud Detection
 
 on:
   workflow_dispatch:
-
   push:
     branches:
       - main
@@ -11,15 +10,26 @@ env:
   AWS_REGION: us-east-1
   CLUSTER_NAME: fraud-cluster
   HELM_RELEASE: fraud-api
+  NAMESPACE: fraud
+  ECR_REPOSITORY: fraud-api
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+
     steps:
+      ##########################################################
+      # Checkout Repository
+      ##########################################################
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      ##########################################################
+      # Configure AWS Credentials
+      ##########################################################
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
@@ -27,26 +37,75 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      ##########################################################
+      # Login to Amazon ECR
+      ##########################################################
+      - name: Login to Amazon ECR
+        id: login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      ##########################################################
+      # Install kubectl
+      ##########################################################
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
 
+      ##########################################################
+      # Install Helm
+      ##########################################################
       - name: Install Helm
         uses: azure/setup-helm@v4
 
+      ##########################################################
+      # Configure kubeconfig
+      ##########################################################
       - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig \
             --region $AWS_REGION \
             --name $CLUSTER_NAME
 
+      ##########################################################
+      # Verify Cluster
+      ##########################################################
+      - name: Verify Cluster
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+
+      ##########################################################
+      # Create Namespace
+      ##########################################################
+      - name: Create Namespace
+        run: |
+          kubectl create namespace $NAMESPACE \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      ##########################################################
+      # Deploy with Helm
+      ##########################################################
       - name: Deploy using Helm
         run: |
           helm upgrade --install \
             $HELM_RELEASE \
-            ./heml/fraud-chart \
-            --namespace fraud \
-            --create-namespace
+            ./helm/fraud-chart \
+            --namespace $NAMESPACE \
+            --create-namespace \
+            --set image.repository=${{ steps.login.outputs.registry }}/$ECR_REPOSITORY \
+            --set image.tag=${{ github.sha }}
 
+      ##########################################################
+      # Verify Rollout
+      ##########################################################
       - name: Verify Deployment
         run: |
-          kubectl rollout status deployment/$HELM_RELEASE -n fraud
+          kubectl rollout status deployment/$HELM_RELEASE -n $NAMESPACE --timeout=300s
+
+      ##########################################################
+      # Verify Resources
+      ##########################################################
+      - name: Verify Resources
+        run: |
+          kubectl get pods -n $NAMESPACE
+          kubectl get svc -n $NAMESPACE
+          kubectl get ingress -n $NAMESPACE || true
