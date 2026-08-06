@@ -161,43 +161,18 @@ jobs:
       # Check Data Drift
       # =====================================
       - name: Check Data Drift Status
-
         id: data_drift_check
-
         if: steps.model.outputs.exists == 'true'
-
         run: |
-
-          python <<EOF
-
-          import json
-
-
-          with open(
-              "artifacts/data_drift.json"
-          ) as f:
-
-              result=json.load(f)
-
-
-
-          if result["drift_detected"]:
-
-              print(
-                "Data drift detected"
-              )
-
-              exit(1)
-
-
-
-          print(
-            "No data drift detected"
-          )
-
-          EOF
-
-
+           python <<EOF
+           import json
+             with open("artifacts/data_drift.json") as f:
+                result = json.load(f)
+             if result["data_drift_detected"]:
+               print("Data drift detected")
+               exit(1)
+             print("No data drift detected")
+             EOF
 
       # =====================================
       # Evaluate Model
