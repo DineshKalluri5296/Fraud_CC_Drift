@@ -11,17 +11,6 @@ THRESHOLD = 0.03
 os.makedirs("artifacts", exist_ok=True)
 
 
-def get_accuracy(data):
-    if "metrics" in data:
-        return float(data["metrics"]["accuracy"])
-    elif "accuracy" in data:
-        return float(data["accuracy"])
-    else:
-        raise KeyError(
-            f"Accuracy not found. Keys are: {list(data.keys())}"
-        )
-
-
 def detect_model_drift():
 
     with open(BASELINE_FILE) as f:
@@ -30,14 +19,8 @@ def detect_model_drift():
     with open(CURRENT_FILE) as f:
         current = json.load(f)
 
-    print("Baseline JSON:")
-    print(json.dumps(baseline, indent=2))
-
-    print("Current JSON:")
-    print(json.dumps(current, indent=2))
-
-    baseline_acc = get_accuracy(baseline)
-    current_acc = get_accuracy(current)
+    baseline_acc = float(baseline["accuracy"])
+    current_acc = float(current["accuracy"])
 
     difference = baseline_acc - current_acc
 
