@@ -6,6 +6,8 @@ kind: ServiceMonitor
 metadata:
   name: {{ include "fraud-chart.fullname" . }}
   namespace: {{ .Release.Namespace }}
+  labels:
+    release: monitoring
 
 spec:
   selector:
