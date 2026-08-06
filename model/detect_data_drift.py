@@ -7,7 +7,6 @@ from scipy.stats import ks_2samp
 
 REFERENCE_DATA = "data/reference.csv"
 CURRENT_DATA = "data/current.csv"
-
 OUTPUT = "artifacts/data_drift.json"
 
 # Drift detection thresholds
@@ -34,23 +33,25 @@ def detect_data_drift():
             cur[column]
         )
 
-        # Require both statistical significance and meaningful difference
+        # Convert NumPy types to native Python types
+        statistic = float(statistic)
+        p_value = float(p_value)
+
         column_drift = (
             p_value < P_VALUE_THRESHOLD
             and statistic > KS_THRESHOLD
         )
 
         report[column] = {
-            "ks_statistic": round(float(statistic), 4),
-            "p_value": round(float(p_value), 4),
-            "drift": column_drift
+            "ks_statistic": statistic,
+            "p_value": p_value,
+            "drift": True if column_drift else False
         }
 
-        if column_drift:
-            drift_detected = True
+        drift_detected = drift_detected or column_drift
 
     final_report = {
-        "data_drift_detected": drift_detected,
+        "data_drift_detected": True if drift_detected else False,
         "columns": report
     }
 
