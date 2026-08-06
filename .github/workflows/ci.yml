@@ -18,22 +18,33 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ==========================
+      # Checkout Repository
+      # ==========================
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
+      # ==========================
+      # Setup Python
+      # ==========================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      # ==========================
+      # Install Dependencies
+      # ==========================
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Train Model
-        run: python model/train.py
-
+      # ==========================
+      # Run Tests with Coverage
+      # ==========================
       - name: Run Tests with Coverage
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -44,12 +55,36 @@ jobs:
             --cov-report=xml \
             --cov-report=term
 
+      # ==========================
+      # SonarQube Scan
+      # ==========================
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      # ==========================
+      # SonarQube Quality Gate
+      # ==========================
+      - name: SonarQube Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1.2.0
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # ==========================
+      # Upload Coverage
+      # ==========================
       - name: Upload Coverage
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage.xml
 
+      # ==========================
+      # Upload Test Results
+      # ==========================
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4
@@ -58,3 +93,105 @@ jobs:
           path: |
             .pytest_cache
             coverage.xml
+
+      # ==========================
+      # Configure AWS Credentials
+      # ==========================
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # ==========================
+      # Verify AWS Credentials
+      # ==========================
+      - name: Verify AWS
+        run: aws sts get-caller-identity
+
+      # ==========================
+      # Check if Model Exists in S3
+      # ==========================
+      - name: Check Model in S3
+        id: model
+        run: |
+          if aws s3 ls s3://${{ secrets.MODEL_BUCKET }}/model/model.pkl > /dev/null 2>&1
+          then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      # ==========================
+      # Download Existing Model
+      # ==========================
+      - name: Download Model
+        if: steps.model.outputs.exists == 'true'
+        run: |
+          mkdir -p model
+          aws s3 cp s3://${{ secrets.MODEL_BUCKET }}/model/model.pkl model/model.pkl
+
+      # ==========================
+      # Train Model (Only First Time)
+      # ==========================
+      - name: Train Model
+        if: steps.model.outputs.exists == 'false'
+        run: |
+          python model/train.py
+
+      # ==========================
+      # Evaluate Existing Model
+      # ==========================
+      - name: Evaluate Model
+        id: evaluate
+        if: steps.model.outputs.exists == 'true'
+        continue-on-error: true
+        run: |
+          python model/evaluate.py
+
+      # ==========================
+      # Retrain if Accuracy Drops
+      # ==========================
+      - name: Retrain Model
+        if: steps.evaluate.outcome == 'failure'
+        run: |
+          python model/train.py
+
+      # ==========================
+      # Upload New Model to S3
+      # ==========================
+      - name: Upload Model to S3
+        if: steps.model.outputs.exists == 'false' || steps.evaluate.outcome == 'failure'
+        run: |
+          aws s3 cp model/model.pkl s3://${{ secrets.MODEL_BUCKET }}/model/model.pkl
+
+      # ==========================
+      # Login to Amazon ECR
+      # ==========================
+      - name: Login to Amazon ECR
+        id: login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ==========================
+      # Build Docker Image
+      # ==========================
+      - name: Build Docker Image
+        env:
+          REGISTRY: ${{ steps.login.outputs.registry }}
+        run: |
+          docker build \
+            -f docker/Dockerfile \
+            -t $REGISTRY/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }} \
+            -t $REGISTRY/${{ secrets.ECR_REPOSITORY }}:latest \
+            .
+
+      # ==========================
+      # Push Docker Image
+      # ==========================
+      - name: Push Docker Image
+        env:
+          REGISTRY: ${{ steps.login.outputs.registry }}
+        run: |
+          docker push $REGISTRY/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
+          docker push $REGISTRY/${{ secrets.ECR_REPOSITORY }}:latest
