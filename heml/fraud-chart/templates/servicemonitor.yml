@@ -1,34 +1,25 @@
 {{- if .Values.serviceMonitor.enabled }}
 
 apiVersion: monitoring.coreos.com/v1
-
 kind: ServiceMonitor
 
 metadata:
-
   name: {{ include "fraud-chart.fullname" . }}
+  namespace: {{ .Release.Namespace }}
 
 spec:
-
   selector:
-
     matchLabels:
-      app: fraud-api
+      app.kubernetes.io/instance: {{ .Release.Name }}
 
   namespaceSelector:
-
     matchNames:
-
       - {{ .Release.Namespace }}
 
   endpoints:
-
     - port: http
-
       path: /metrics
-
       interval: {{ .Values.serviceMonitor.interval }}
-
       scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
 
 {{- end }}
