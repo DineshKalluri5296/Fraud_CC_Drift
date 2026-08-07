@@ -3,13 +3,12 @@ import os
 
 import pandas as pd
 from scipy.stats import ks_2samp
-
+from pandas.errors import EmptyDataError
 
 REFERENCE_DATA = "data/reference.csv"
 CURRENT_DATA = "data/current.csv"
 OUTPUT = "artifacts/data_drift.json"
 
-# Drift detection thresholds
 P_VALUE_THRESHOLD = 0.05
 KS_THRESHOLD = 0.01
 
@@ -17,8 +16,51 @@ os.makedirs("artifacts", exist_ok=True)
 
 
 def detect_data_drift():
-    ref = pd.read_csv(REFERENCE_DATA)
-    cur = pd.read_csv(CURRENT_DATA)
+
+    try:
+        ref = pd.read_csv(REFERENCE_DATA)
+        cur = pd.read_csv(CURRENT_DATA)
+    except EmptyDataError:
+        report = {
+            "data_drift_detected": True,
+            "drift_type": "empty_dataset",
+            "reason": "Current or reference dataset is empty"
+        }
+
+        with open(OUTPUT, "w") as f:
+            json.dump(report, f, indent=4)
+
+        print(json.dumps(report, indent=4))
+        return
+
+    # ==============================
+    # Schema Drift Detection
+    # ==============================
+
+    ref_columns = set(ref.columns)
+    cur_columns = set(cur.columns)
+
+    missing_columns = sorted(list(ref_columns - cur_columns))
+    extra_columns = sorted(list(cur_columns - ref_columns))
+
+    if missing_columns or extra_columns:
+
+        report = {
+            "data_drift_detected": True,
+            "drift_type": "schema_drift",
+            "missing_columns": missing_columns,
+            "extra_columns": extra_columns
+        }
+
+        with open(OUTPUT, "w") as f:
+            json.dump(report, f, indent=4)
+
+        print(json.dumps(report, indent=4))
+        return
+
+    # ==============================
+    # Statistical Drift Detection
+    # ==============================
 
     report = {}
     drift_detected = False
@@ -33,7 +75,6 @@ def detect_data_drift():
             cur[column]
         )
 
-        # Convert NumPy types to native Python types
         statistic = float(statistic)
         p_value = float(p_value)
 
@@ -45,13 +86,14 @@ def detect_data_drift():
         report[column] = {
             "ks_statistic": statistic,
             "p_value": p_value,
-            "drift": True if column_drift else False
+            "drift": column_drift
         }
 
-        drift_detected = drift_detected or column_drift
+        drift_detected |= column_drift
 
     final_report = {
-        "data_drift_detected": True if drift_detected else False,
+        "data_drift_detected": drift_detected,
+        "drift_type": "statistical_drift" if drift_detected else "no_drift",
         "columns": report
     }
 
