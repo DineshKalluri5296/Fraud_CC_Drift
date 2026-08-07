@@ -3,28 +3,14 @@ name: Fraud Detection CI
 on:
 
   workflow_dispatch:
-  
-  # push:
-  #   branches:
-  #     - main
-  #     - develop
-
-  # pull_request:
-  #   branches:
-  #     - main
-
-
+ 
 env:
   PYTHON_VERSION: "3.11"
 
-
 jobs:
-
   test:
 
     runs-on: ubuntu-latest
-
-
     steps:
 
       # =====================================
@@ -55,34 +41,22 @@ jobs:
 
           pip install -r requirements.txt
 
-
-
       # =====================================
       # Configure AWS Credentials
       # =====================================
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v5
-
         with:
-
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
           aws-region: ${{ secrets.AWS_REGION }}
-
-
 
       # =====================================
       # Verify AWS
       # =====================================
       - name: Verify AWS
-
         run: |
-
           aws sts get-caller-identity
-
-
 
       # =====================================
       # Check Model in S3
@@ -90,9 +64,7 @@ jobs:
       - name: Check Model in S3
 
         id: model
-
         run: |
-
           if aws s3 ls \
           s3://${{ secrets.MODEL_BUCKET }}/model/model.pkl \
           > /dev/null 2>&1
@@ -107,20 +79,14 @@ jobs:
 
           fi
 
-
-
       # =====================================
       # Download Existing Model
       # =====================================
       - name: Download Model
 
         if: steps.model.outputs.exists == 'true'
-
         run: |
-
           mkdir -p model
-
-
           aws s3 cp \
           s3://${{ secrets.MODEL_BUCKET }}/model/model.pkl \
           model/model.pkl
@@ -131,195 +97,109 @@ jobs:
       # First Model Training
       # =====================================
       - name: Train First Model
-
         if: steps.model.outputs.exists == 'false'
-
         run: |
-
           python model/train.py
 
-
+      # =====================================
+      # Evaluate First Model
+      # =====================================
+      - name: Evaluate First Model
+        if: steps.model.outputs.exists == 'false'
+        run: |
+            python model/evaluate.py
 
       # =====================================
+      # Upload First Model
+      # =====================================
+      - name: Upload First Model
+        if: steps.model.outputs.exists == 'false'
+        run: |
+          aws s3 cp \
+          model/model.pkl \
+          s3://${{ secrets.MODEL_BUCKET }}/model/model.pkl
+
+      # ===================================== 
       # Data Drift Detection
       # =====================================
       - name: Detect Data Drift
-
-        id: data_drift
-
         if: steps.model.outputs.exists == 'true'
-
-        continue-on-error: true
-
         run: |
-
           python model/detect_data_drift.py
-
-
 
       # =====================================
       # Check Data Drift
       # =====================================
       - name: Check Data Drift Status
-        id: data_drift_check
+        id: drift
         if: steps.model.outputs.exists == 'true'
         run: |
            python <<EOF
            import json
+           import os
+
            with open("artifacts/data_drift.json") as f:
-                result = json.load(f)
-           if result["data_drift_detected"]:
-               print("Data drift detected")
-               exit(1)
-           print("No data drift detected")
+               result = json.load(f)
+           output = os.environ["GITHUB_OUTPUT"]
+
+           with open(output, "a") as g:
+              if result["data_drift_detected"]:
+                 print("Data drift detected")
+                 g.write("drift=true\n")
+              else:
+                 print("No data drift detected")
+                 g.write("drift=false\n")
            EOF
-
-      # =====================================
-      # Evaluate Model
-      # =====================================
-      - name: Evaluate Model
-
-        if: steps.model.outputs.exists == 'true'
-
-        run: |
-
-          python model/evaluate.py
-
-
-
-      # =====================================
-      # Model Drift Detection
-      # =====================================
-      - name: Detect Model Drift
-
-        id: model_drift
-
-        if: steps.model.outputs.exists == 'true'
-
-        continue-on-error: true
-
-        run: |
-
-          python model/detect_model_drift.py
-
-
-
-      # =====================================
-      # Check Model Drift
-      # =====================================
-      - name: Check Model Drift Status
-
-        id: model_drift_check
-
-        if: steps.model.outputs.exists == 'true'
-
-        run: |
-
-          python <<EOF
-
-          import json
-
-
-          with open(
-              "artifacts/model_drift.json"
-          ) as f:
-
-              result=json.load(f)
-
-
-
-          if result["model_drift_detected"]:
-
-              print(
-                "Model drift detected"
-              )
-
-              exit(1)
-
-
-
-          print(
-            "Model stable"
-          )
-
-
-          EOF
-
-
-
       # =====================================
       # Retrain Model
       # =====================================
       - name: Retrain Model
-
-        if: |
-
-          steps.data_drift_check.outcome == 'failure' ||
-
-          steps.model_drift_check.outcome == 'failure'
-
-
+        if: steps.drift.outputs.drift == 'true'
         run: |
-
           python model/train.py
 
-
-
       # =====================================
-      # Upload Model to S3
+      # Evaluate Retrained Model
       # =====================================
-      - name: Upload Model to S3
-
-        if: |
-
-          steps.model.outputs.exists == 'false' ||
-
-          steps.data_drift_check.outcome == 'failure' ||
-
-          steps.model_drift_check.outcome == 'failure'
-
-
+      - name: Evaluate Retrained Model
+        if: steps.drift.outputs.drift == 'true'
         run: |
+          python model/evaluate.py
 
-          aws s3 cp \
-          model/model.pkl \
-          s3://${{ secrets.MODEL_BUCKET }}/model/model.pkl
-
-
+      # =====================================
+      # Upload Retrained Model
+      # =====================================
+      - name: Upload Retrained Model
+        if: steps.drift.outputs.drift == 'true'
+        run: |
+           aws s3 cp \
+             model/model.pkl \
+             s3://${{ secrets.MODEL_BUCKET }}/model/model.pkl
 
       # =====================================
       # Upload Drift Reports
       # =====================================
       - name: Upload Drift Reports
 
-        if: always()
-
+        if: always() && steps.model.outputs.exists == 'true'
         uses: actions/upload-artifact@v4
-
         with:
-
           name: drift-reports
-
           path: |
-
             artifacts/data_drift.json
-
-            artifacts/model_drift.json
-
-
 
       # =====================================
       # Verify Model
       # =====================================
       - name: Verify Model
-
         run: |
-
           ls -R
-
-          test -f model/model.pkl
-
-
+          if [ -f model/model.pkl ]; then
+            echo "Model exists"
+          else
+             echo "Model not found"
+             exit 1
+          fi
 
       # =====================================
       # Run Tests
@@ -327,10 +207,7 @@ jobs:
       - name: Run Tests with Coverage
 
         env:
-
           PYTHONPATH: ${{ github.workspace }}
-
-
         run: |
 
           pytest tests \
@@ -339,22 +216,15 @@ jobs:
           --cov-report=xml \
           --cov-report=term
 
-
-
       # =====================================
       # SonarQube Scan
       # =====================================
       - name: SonarQube Scan
 
         uses: SonarSource/sonarqube-scan-action@v6
-
         env:
-
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-
 
       # =====================================
       # Sonar Quality Gate
@@ -362,14 +232,9 @@ jobs:
       - name: SonarQube Quality Gate
 
         uses: SonarSource/sonarqube-quality-gate-action@v1.2.0
-
         timeout-minutes: 5
-
         env:
-
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-
 
       # =====================================
       # Upload Coverage
@@ -377,46 +242,28 @@ jobs:
       - name: Upload Coverage
 
         uses: actions/upload-artifact@v4
-
         with:
-
           name: coverage-report
-
           path: coverage.xml
-
-
 
       # =====================================
       # Upload Test Results
       # =====================================
       - name: Upload Test Results
-
         if: always()
-
         uses: actions/upload-artifact@v4
-
         with:
-
           name: test-results
-
           path: |
-
             .pytest_cache
-
             coverage.xml
-
-
 
       # =====================================
       # Login ECR
       # =====================================
       - name: Login to Amazon ECR
-
         id: login
-
         uses: aws-actions/amazon-ecr-login@v2
-
-
 
       # =====================================
       # Build Docker Image
@@ -424,10 +271,7 @@ jobs:
       - name: Build Docker Image
 
         env:
-
           REGISTRY: ${{ steps.login.outputs.registry }}
-
-
         run: |
 
           docker build \
@@ -435,24 +279,16 @@ jobs:
           -t $REGISTRY/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }} \
           -t $REGISTRY/${{ secrets.ECR_REPOSITORY }}:latest \
           .
-
-
-
       # =====================================
       # Push Docker Image
       # =====================================
       - name: Push Docker Image
 
         env:
-
           REGISTRY: ${{ steps.login.outputs.registry }}
-
-
         run: |
-
           docker push \
           $REGISTRY/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
-
 
           docker push \
           $REGISTRY/${{ secrets.ECR_REPOSITORY }}:latest
