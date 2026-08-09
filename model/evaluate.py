@@ -1,4 +1,3 @@
-```python
 import json
 import os
 
@@ -95,4 +94,3 @@ if accuracy < ACCURACY_THRESHOLD:
     )
 
 print("Model Passed")
-```
