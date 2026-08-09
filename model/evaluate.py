@@ -1,80 +1,95 @@
 import json
-import os
-
 import joblib
 import pandas as pd
+
 from sklearn.metrics import (
     accuracy_score,
-    f1_score,
     precision_score,
     recall_score,
+    f1_score
 )
+
 from sklearn.model_selection import train_test_split
 
 
-DATA_PATH = "data/card_transdata.csv"
-MODEL_PATH = "model/model.pkl"
-OUTPUT_PATH = "artifacts/evaluation.json"
-ACCURACY_THRESHOLD = 0.95
+# ==========================================================
+# Load Data
+# ==========================================================
+
+df = pd.read_csv("data/card_transdata.csv")
+
+X = df.drop("fraud", axis=1)
+
+y = df["fraud"]
 
 
-def evaluate_model():
-    """Evaluate the fraud detection model."""
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.2,
+    random_state=42,
+    stratify=y
+)
 
-    # Load data
-    dataframe = pd.read_csv(DATA_PATH)
 
-    features = dataframe.drop("fraud", axis=1)
-    target = dataframe["fraud"]
+# ==========================================================
+# Load Model
+# ==========================================================
 
-    # Create test dataset
-    _, features_test, _, target_test = train_test_split(
-        features,
-        target,
-        test_size=0.2,
-        random_state=42,
-        stratify=target,
+model = joblib.load("model/model.pkl")
+
+
+# ==========================================================
+# Prediction
+# ==========================================================
+
+pred = model.predict(X_test)
+
+
+accuracy = accuracy_score(y_test, pred)
+
+precision = precision_score(y_test, pred)
+
+recall = recall_score(y_test, pred)
+
+f1 = f1_score(y_test, pred)
+
+
+metrics = {
+
+    "accuracy": round(accuracy, 4),
+
+    "precision": round(precision, 4),
+
+    "recall": round(recall, 4),
+
+    "f1_score": round(f1, 4)
+
+}
+
+
+print(metrics)
+
+
+# ==========================================================
+# Save Metrics
+# ==========================================================
+
+with open("artifacts/evaluation.json", "w") as f:
+
+    json.dump(metrics, f, indent=4)
+
+
+# ==========================================================
+# Threshold Check
+# ==========================================================
+
+THRESHOLD = 0.95
+
+if accuracy < THRESHOLD:
+
+    raise Exception(
+        f"Accuracy dropped to {accuracy:.4f}"
     )
 
-    # Load trained model
-    model = joblib.load(MODEL_PATH)
-
-    # Generate predictions
-    predictions = model.predict(features_test)
-
-    # Calculate metrics
-    accuracy = accuracy_score(target_test, predictions)
-    precision = precision_score(target_test, predictions)
-    recall = recall_score(target_test, predictions)
-    f1 = f1_score(target_test, predictions)
-
-    metrics = {
-        "accuracy": round(accuracy, 4),
-        "precision": round(precision, 4),
-        "recall": round(recall, 4),
-        "f1_score": round(f1, 4),
-    }
-
-    print(json.dumps(metrics, indent=4))
-
-    # Save evaluation results
-    os.makedirs("artifacts", exist_ok=True)
-
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as file:
-        json.dump(metrics, file, indent=4)
-
-    # Model quality check
-    if accuracy < ACCURACY_THRESHOLD:
-        raise ValueError(
-            f"Model accuracy {accuracy:.4f} is below "
-            f"the required threshold {ACCURACY_THRESHOLD:.2f}"
-        )
-
-    print("Model Passed")
-
-    return metrics
-
-
-if __name__ == "__main__":
-    evaluate_model()
-
+print("Model Passed")
