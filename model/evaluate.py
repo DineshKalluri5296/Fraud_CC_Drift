@@ -1,6 +1,5 @@
 import json
 import os
-
 import joblib
 import pandas as pd
 from sklearn.metrics import (
@@ -11,8 +10,7 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import train_test_split
 
-
-# ==========================================================
+# =========================================================
 # Configuration
 # ==========================================================
 
@@ -38,21 +36,16 @@ features_train, features_test, target_train, target_test = train_test_split(
     random_state=42,
     stratify=target,
 )
-
-
 # ==========================================================
 # Load Model
 # ==========================================================
-
 model = joblib.load(MODEL_PATH)
-
 
 # ==========================================================
 # Prediction
 # ==========================================================
 
 predictions = model.predict(features_test)
-
 
 # ==========================================================
 # Calculate Metrics
@@ -71,7 +64,6 @@ metrics = {
 }
 
 print(json.dumps(metrics, indent=4))
-
 
 # ==========================================================
 # Save Metrics
