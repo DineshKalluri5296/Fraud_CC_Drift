@@ -87,7 +87,6 @@
 
 # print("Model Passed")
 
-```python
 import json
 import os
 
@@ -167,5 +166,4 @@ def evaluate_model():
 
 if __name__ == "__main__":
     evaluate_model()
-```
 
