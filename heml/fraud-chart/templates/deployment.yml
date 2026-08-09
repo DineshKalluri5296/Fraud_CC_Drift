@@ -1,14 +1,13 @@
+```yaml
 apiVersion: apps/v1
 kind: Deployment
 
 metadata:
   name: {{ include "fraud-chart.fullname" . }}
-
   labels:
     {{- include "fraud-chart.labels" . | nindent 4 }}
 
 spec:
-
   replicas: {{ .Values.replicaCount }}
 
   selector:
@@ -16,17 +15,15 @@ spec:
       {{- include "fraud-chart.selectorLabels" . | nindent 6 }}
 
   template:
-
     metadata:
       labels:
         {{- include "fraud-chart.selectorLabels" . | nindent 8 }}
 
     spec:
-
       serviceAccountName: {{ include "fraud-chart.fullname" . }}
+      automountServiceAccountToken: false
 
       containers:
-
         - name: fraud-api
 
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -57,7 +54,7 @@ spec:
                   key: AWS_REGION
 
           resources:
-{{ toYaml .Values.resources | indent 12 }}
+            {{- toYaml .Values.resources | nindent 12 }}
 
           readinessProbe:
             httpGet:
@@ -70,3 +67,4 @@ spec:
               path: /
               port: {{ .Values.containerPort }}
             initialDelaySeconds: 30
+```
