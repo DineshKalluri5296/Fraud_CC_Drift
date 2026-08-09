@@ -88,11 +88,6 @@ DATA_DRIFT_SCORE = Gauge(
     "Current data drift score"
 )
 
-MODEL_DRIFT_SCORE = Gauge(
-    "model_drift_score",
-    "Current model drift score"
-)
-
 # ==========================================================
 # Load Evaluation Metrics
 # ==========================================================
@@ -145,4 +140,3 @@ def update_drift_metrics(data_drift: float, model_drift: float):
     """
 
     DATA_DRIFT_SCORE.set(data_drift)
-    MODEL_DRIFT_SCORE.set(model_drift)
