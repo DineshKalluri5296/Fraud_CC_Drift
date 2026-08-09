@@ -134,7 +134,7 @@ def update_model_metrics(metrics: dict):
     MODEL_F1_SCORE.set(metrics.get("f1_score", 0))
 
 
-def update_drift_metrics(data_drift: float, model_drift: float):
+def update_drift_metrics(data_drift: float):
     """
     Update drift metrics.
     """
