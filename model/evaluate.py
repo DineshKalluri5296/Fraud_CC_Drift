@@ -1,34 +1,43 @@
+```python
 import json
+import os
+
 import joblib
 import pandas as pd
-
 from sklearn.metrics import (
     accuracy_score,
+    f1_score,
     precision_score,
     recall_score,
-    f1_score
 )
-
 from sklearn.model_selection import train_test_split
+
+
+# ==========================================================
+# Configuration
+# ==========================================================
+
+DATA_PATH = "data/card_transdata.csv"
+MODEL_PATH = "model/model.pkl"
+OUTPUT_PATH = "artifacts/evaluation.json"
+ACCURACY_THRESHOLD = 0.95
 
 
 # ==========================================================
 # Load Data
 # ==========================================================
 
-df = pd.read_csv("data/card_transdata.csv")
+df = pd.read_csv(DATA_PATH)
 
-X = df.drop("fraud", axis=1)
+features = df.drop("fraud", axis=1)
+target = df["fraud"]
 
-y = df["fraud"]
-
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
+features_train, features_test, target_train, target_test = train_test_split(
+    features,
+    target,
     test_size=0.2,
     random_state=42,
-    stratify=y
+    stratify=target,
 )
 
 
@@ -36,60 +45,54 @@ X_train, X_test, y_train, y_test = train_test_split(
 # Load Model
 # ==========================================================
 
-model = joblib.load("model/model.pkl")
+model = joblib.load(MODEL_PATH)
 
 
 # ==========================================================
 # Prediction
 # ==========================================================
 
-pred = model.predict(X_test)
+predictions = model.predict(features_test)
 
 
-accuracy = accuracy_score(y_test, pred)
+# ==========================================================
+# Calculate Metrics
+# ==========================================================
 
-precision = precision_score(y_test, pred)
-
-recall = recall_score(y_test, pred)
-
-f1 = f1_score(y_test, pred)
-
+accuracy = accuracy_score(target_test, predictions)
+precision = precision_score(target_test, predictions)
+recall = recall_score(target_test, predictions)
+f1 = f1_score(target_test, predictions)
 
 metrics = {
-
     "accuracy": round(accuracy, 4),
-
     "precision": round(precision, 4),
-
     "recall": round(recall, 4),
-
-    "f1_score": round(f1, 4)
-
+    "f1_score": round(f1, 4),
 }
 
-
-print(metrics)
+print(json.dumps(metrics, indent=4))
 
 
 # ==========================================================
 # Save Metrics
 # ==========================================================
 
-with open("artifacts/evaluation.json", "w") as f:
+os.makedirs("artifacts", exist_ok=True)
 
-    json.dump(metrics, f, indent=4)
+with open(OUTPUT_PATH, "w", encoding="utf-8") as file:
+    json.dump(metrics, file, indent=4)
 
 
 # ==========================================================
-# Threshold Check
+# Accuracy Threshold Check
 # ==========================================================
 
-THRESHOLD = 0.95
-
-if accuracy < THRESHOLD:
-
-    raise Exception(
-        f"Accuracy dropped to {accuracy:.4f}"
+if accuracy < ACCURACY_THRESHOLD:
+    raise ValueError(
+        f"Model accuracy {accuracy:.4f} is below "
+        f"the required threshold {ACCURACY_THRESHOLD:.2f}"
     )
 
 print("Model Passed")
+```
