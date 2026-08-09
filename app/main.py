@@ -13,11 +13,9 @@ from app.metrics import (
     PREDICTION_LATENCY,
     MODEL_ACCURACY,
     DATA_DRIFT_SCORE,
-    MODEL_DRIFT_SCORE,
 )
 from app.schema import FraudRequest
 from app.predict import predict_fraud
-
 
 app = FastAPI(
     title="Fraud Detection API",
@@ -35,8 +33,6 @@ def home():
     return {
         "message": "Fraud Detection API Running"
     }
-
-
 ############################################################
 # Health Check
 ############################################################
@@ -93,7 +89,6 @@ def predict(request: FraudRequest):
         )
 
     }
-
 
 ############################################################
 # Prometheus Metrics
