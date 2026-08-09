@@ -40,8 +40,8 @@ def detect_data_drift():
     ref_columns = set(ref.columns)
     cur_columns = set(cur.columns)
 
-    missing_columns = sorted(list(ref_columns - cur_columns))
-    extra_columns = sorted(list(cur_columns - ref_columns))
+    missing_columns = sorted(ref_columns - cur_columns)
+    extra_columns = sorted(cur_columns - ref_columns)
 
     if missing_columns or extra_columns:
 
