@@ -23,6 +23,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY --chown=appuser:appgroup app/ /app/app/
 COPY --chown=appuser:appgroup model/ /app/model/
 COPY --chown=appuser:appgroup data/ /app/data/
+COPY --chown=appuser:appgroup artifacts/ /app/artifacts/
 
 RUN find /app -type d -exec chmod 755 {} \; \
     && find /app -type f -exec chmod 644 {} \;
