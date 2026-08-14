@@ -1,0 +1,9 @@
+{
+  "data_drift_detected": true,
+  "drift_type": "schema_drift",
+  "missing_columns": [
+    "distance_from_last_transaction",
+    "online_order"
+  ],
+  "extra_columns": []
+}
