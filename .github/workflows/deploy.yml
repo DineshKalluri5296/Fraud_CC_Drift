@@ -8,10 +8,10 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  CLUSTER_NAME: fraud-cluster
+  CLUSTER_NAME: my-cluster
   HELM_RELEASE: fraud-api
   NAMESPACE: fraud
-  ECR_REPOSITORY: fraud-api
+  ECR_REPOSITORY: frauddetectioncc
 
 jobs:
   deploy:
