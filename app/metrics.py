@@ -88,6 +88,11 @@ DATA_DRIFT_SCORE = Gauge(
     "Current data drift score"
 )
 
+DATA_DRIFT_DETECTED = Gauge(
+    "data_drift_detected",
+    "Whether data drift was detected"
+)
+
 # ==========================================================
 # Load Evaluation Metrics
 # ==========================================================
@@ -97,26 +102,55 @@ METRICS_FILE = Path("artifacts/evaluation.json")
 if METRICS_FILE.exists():
 
     with open(METRICS_FILE, "r") as f:
-
         metrics = json.load(f)
 
-    MODEL_ACCURACY.set(metrics.get("accuracy", 0))
+    MODEL_ACCURACY.set(
+        metrics.get("accuracy", 0)
+    )
 
-    MODEL_PRECISION.set(metrics.get("precision", 0))
+    MODEL_PRECISION.set(
+        metrics.get("precision", 0)
+    )
 
-    MODEL_RECALL.set(metrics.get("recall", 0))
+    MODEL_RECALL.set(
+        metrics.get("recall", 0)
+    )
 
-    MODEL_F1_SCORE.set(metrics.get("f1_score", 0))
+    MODEL_F1_SCORE.set(
+        metrics.get("f1_score", 0)
+    )
 
 else:
 
     MODEL_ACCURACY.set(0)
-
     MODEL_PRECISION.set(0)
-
     MODEL_RECALL.set(0)
-
     MODEL_F1_SCORE.set(0)
+
+
+# ==========================================================
+# Load Data Drift Metrics
+# ==========================================================
+
+DRIFT_FILE = Path("artifacts/data_drift.json")
+
+if DRIFT_FILE.exists():
+
+    with open(DRIFT_FILE, "r") as f:
+        drift = json.load(f)
+
+    DATA_DRIFT_DETECTED.set(
+        1 if drift.get("data_drift_detected", False) else 0
+    )
+
+    DATA_DRIFT_SCORE.set(
+        drift.get("overall_drift_score", 0)
+    )
+
+else:
+
+    DATA_DRIFT_DETECTED.set(0)
+    DATA_DRIFT_SCORE.set(0)
 
 
 # ==========================================================
@@ -128,15 +162,26 @@ def update_model_metrics(metrics: dict):
     Update model evaluation metrics.
     """
 
-    MODEL_ACCURACY.set(metrics.get("accuracy", 0))
-    MODEL_PRECISION.set(metrics.get("precision", 0))
-    MODEL_RECALL.set(metrics.get("recall", 0))
-    MODEL_F1_SCORE.set(metrics.get("f1_score", 0))
+    MODEL_ACCURACY.set(
+        metrics.get("accuracy", 0)
+    )
+
+    MODEL_PRECISION.set(
+        metrics.get("precision", 0)
+    )
+
+    MODEL_RECALL.set(
+        metrics.get("recall", 0)
+    )
+
+    MODEL_F1_SCORE.set(
+        metrics.get("f1_score", 0)
+    )
 
 
 def update_drift_metrics(data_drift: float):
     """
-    Update drift metrics.
+    Update drift score.
     """
 
     DATA_DRIFT_SCORE.set(data_drift)
