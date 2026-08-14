@@ -86,13 +86,11 @@ jobs:
       ##########################################################
       - name: Deploy using Helm
         run: |
-          helm upgrade --install \
-            $HELM_RELEASE \
-            ./heml/fraud-chart \
-            --namespace $NAMESPACE \
-            --create-namespace \
-            --set image.repository=${{ steps.login.outputs.registry }}/$ECR_REPOSITORY \
-            --set image.tag=${{ github.sha }}
+         helm upgrade --install fraud-api
+         ./helm/fraud-chart
+         --namespace fraud
+         --set image.repository=821656895219.dkr.ecr.us-east-1.amazonaws.com/frauddetectioncc
+         --set image.tag=440e2779f20e49024c7da24fc1fdb3f138d45f00
 
       ##########################################################
       # Verify Rollout
