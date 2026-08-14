@@ -12,6 +12,15 @@ from prometheus_client import (
 )
 
 # ==========================================================
+# Artifact Files
+# ==========================================================
+
+METRICS_FILE = Path("artifacts/evaluation.json")
+DATA_DRIFT_FILE = Path("artifacts/data_drift.json")
+DRIFT_REPORT_FILE = Path("artifacts/drift_report.json")
+
+
+# ==========================================================
 # Request Metrics
 # ==========================================================
 
@@ -19,6 +28,7 @@ REQUEST_COUNT = Counter(
     "prediction_requests_total",
     "Total number of prediction requests"
 )
+
 
 # ==========================================================
 # Prediction Metrics
@@ -33,6 +43,7 @@ NON_FRAUD_PREDICTIONS = Counter(
     "nonfraud_predictions_total",
     "Total non-fraud predictions"
 )
+
 
 # ==========================================================
 # Latency
@@ -54,6 +65,7 @@ PREDICTION_LATENCY = Histogram(
         5
     )
 )
+
 
 # ==========================================================
 # Model Metrics
@@ -79,78 +91,20 @@ MODEL_F1_SCORE = Gauge(
     "Current model F1 Score"
 )
 
+
 # ==========================================================
 # Drift Metrics
 # ==========================================================
 
 DATA_DRIFT_SCORE = Gauge(
     "data_drift_score",
-    "Current data drift score"
+    "Current statistical data drift score"
 )
 
 DATA_DRIFT_DETECTED = Gauge(
     "data_drift_detected",
     "Whether data drift was detected"
 )
-
-# ==========================================================
-# Load Evaluation Metrics
-# ==========================================================
-
-METRICS_FILE = Path("artifacts/evaluation.json")
-
-if METRICS_FILE.exists():
-
-    with open(METRICS_FILE, "r") as f:
-        metrics = json.load(f)
-
-    MODEL_ACCURACY.set(
-        metrics.get("accuracy", 0)
-    )
-
-    MODEL_PRECISION.set(
-        metrics.get("precision", 0)
-    )
-
-    MODEL_RECALL.set(
-        metrics.get("recall", 0)
-    )
-
-    MODEL_F1_SCORE.set(
-        metrics.get("f1_score", 0)
-    )
-
-else:
-
-    MODEL_ACCURACY.set(0)
-    MODEL_PRECISION.set(0)
-    MODEL_RECALL.set(0)
-    MODEL_F1_SCORE.set(0)
-
-
-# ==========================================================
-# Load Data Drift Metrics
-# ==========================================================
-
-DRIFT_FILE = Path("artifacts/data_drift.json")
-
-if DRIFT_FILE.exists():
-
-    with open(DRIFT_FILE, "r") as f:
-        drift = json.load(f)
-
-    DATA_DRIFT_DETECTED.set(
-        1 if drift.get("data_drift_detected", False) else 0
-    )
-
-    DATA_DRIFT_SCORE.set(
-        drift.get("overall_drift_score", 0)
-    )
-
-else:
-
-    DATA_DRIFT_DETECTED.set(0)
-    DATA_DRIFT_SCORE.set(0)
 
 
 # ==========================================================
@@ -181,7 +135,84 @@ def update_model_metrics(metrics: dict):
 
 def update_drift_metrics(data_drift: float):
     """
-    Update drift score.
+    Update statistical data drift score.
     """
 
     DATA_DRIFT_SCORE.set(data_drift)
+
+
+def load_model_metrics():
+    """
+    Load model evaluation metrics from evaluation.json.
+    """
+
+    if not METRICS_FILE.exists():
+
+        update_model_metrics({})
+
+        return
+
+    with open(METRICS_FILE, "r") as file:
+
+        metrics = json.load(file)
+
+    update_model_metrics(metrics)
+
+
+def load_data_drift_status():
+    """
+    Load schema/data drift status from data_drift.json.
+    """
+
+    if not DATA_DRIFT_FILE.exists():
+
+        DATA_DRIFT_DETECTED.set(0)
+
+        return
+
+    with open(DATA_DRIFT_FILE, "r") as file:
+
+        drift = json.load(file)
+
+    detected = drift.get(
+        "data_drift_detected",
+        False
+    )
+
+    DATA_DRIFT_DETECTED.set(
+        1 if detected else 0
+    )
+
+
+def load_drift_score():
+    """
+    Load statistical drift score from drift_report.json.
+    """
+
+    if not DRIFT_REPORT_FILE.exists():
+
+        DATA_DRIFT_SCORE.set(0)
+
+        return
+
+    with open(DRIFT_REPORT_FILE, "r") as file:
+
+        drift_report = json.load(file)
+
+    DATA_DRIFT_SCORE.set(
+        drift_report.get(
+            "overall_drift_score",
+            0
+        )
+    )
+
+
+# ==========================================================
+# Load Metrics at Application Startup
+# ==========================================================
+
+load_model_metrics()
+
+load_data_drift_status()
+
+load_drift_score()
