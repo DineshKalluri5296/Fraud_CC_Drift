@@ -106,6 +106,10 @@ DATA_DRIFT_DETECTED = Gauge(
     "Whether data drift was detected"
 )
 
+SCHEMA_DRIFT_DETECTED = Gauge(
+    "schema_drift_detected",
+    "Whether schema drift was detected"
+)
 
 # ==========================================================
 # Helper Functions
@@ -160,13 +164,11 @@ def load_model_metrics():
 
 
 def load_data_drift_status():
-    """
-    Load schema/data drift status from data_drift.json.
-    """
 
     if not DATA_DRIFT_FILE.exists():
 
         DATA_DRIFT_DETECTED.set(0)
+        SCHEMA_DRIFT_DETECTED.set(0)
 
         return
 
@@ -179,10 +181,19 @@ def load_data_drift_status():
         False
     )
 
+    drift_type = drift.get(
+        "drift_type",
+        ""
+    )
+
     DATA_DRIFT_DETECTED.set(
         1 if detected else 0
     )
 
+    SCHEMA_DRIFT_DETECTED.set(
+        1 if drift_type == "schema_drift" else 0
+    )
+    
 
 def load_drift_score():
     """
@@ -216,3 +227,12 @@ load_model_metrics()
 load_data_drift_status()
 
 load_drift_score()
+
+
+def refresh_drift_metrics():
+
+    load_data_drift_status()
+
+    load_drift_score()
+
+
