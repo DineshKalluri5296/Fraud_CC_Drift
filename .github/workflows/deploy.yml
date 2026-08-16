@@ -2,9 +2,6 @@ name: Deploy Fraud Detection
 
 on:
   workflow_dispatch:
-  # push:
-  #   branches:
-  #     - main
 
 env:
   AWS_REGION: us-east-1
@@ -14,22 +11,28 @@ env:
   ECR_REPOSITORY: frauddetectioncc
 
 jobs:
+
   deploy:
+
     runs-on: ubuntu-latest
 
     permissions:
       contents: read
 
     steps:
-      ##########################################################
-      # Checkout Repository
-      ##########################################################
+
+      # =====================================
+      # Checkout
+      # =====================================
+
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      ##########################################################
-      # Configure AWS Credentials
-      ##########################################################
+
+      # =====================================
+      # AWS Credentials
+      # =====================================
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
@@ -37,73 +40,95 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      ##########################################################
-      # Login to Amazon ECR
-      ##########################################################
+
+      # =====================================
+      # ECR Login
+      # =====================================
+
       - name: Login to Amazon ECR
         id: login
         uses: aws-actions/amazon-ecr-login@v2
 
-      ##########################################################
+
+      # =====================================
       # Install kubectl
-      ##########################################################
+      # =====================================
+
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
 
-      ##########################################################
+
+      # =====================================
       # Install Helm
-      ##########################################################
+      # =====================================
+
       - name: Install Helm
         uses: azure/setup-helm@v4
 
-      ##########################################################
+
+      # =====================================
       # Configure kubeconfig
-      ##########################################################
+      # =====================================
+
       - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig \
             --region $AWS_REGION \
             --name $CLUSTER_NAME
 
-      ##########################################################
+
+      # =====================================
       # Verify Cluster
-      ##########################################################
+      # =====================================
+
       - name: Verify Cluster
         run: |
           kubectl cluster-info
           kubectl get nodes
 
-      ##########################################################
-      # Create Namespace
-      ##########################################################
+
+      # =====================================
+      # Namespace
+      # =====================================
+
       - name: Create Namespace
         run: |
           kubectl create namespace $NAMESPACE \
-            --dry-run=client -o yaml | kubectl apply -f -
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
 
-      ##########################################################
-      # Deploy with Helm
-      ##########################################################
+
+      # =====================================
+      # Deploy
+      # =====================================
+
       - name: Deploy using Helm
         run: |
-         helm upgrade --install fraud-api \
-         ./heml/fraud-chart \
-         --namespace fraud \
-         --set image.repository=821656895219.dkr.ecr.us-east-1.amazonaws.com/frauddetectioncc \
-         --set image.tag=0d2c390e754b0edc651d8714028a965ff682b693
 
-      ##########################################################
-      # Verify Rollout
-      ##########################################################
+          helm upgrade --install $HELM_RELEASE \
+            ./helm/fraud-chart \
+            --namespace $NAMESPACE \
+            --set image.repository=821656895219.dkr.ecr.us-east-1.amazonaws.com/frauddetectioncc \
+            --set image.tag=latest
+
+
+      # =====================================
+      # Rollout
+      # =====================================
+
       - name: Verify Deployment
         run: |
-          kubectl rollout status deployment/fraud-api-fraud-chart -n fraud --timeout=300s
+          kubectl rollout status \
+            deployment/fraud-api-fraud-chart \
+            -n $NAMESPACE \
+            --timeout=300s
 
-      ##########################################################
+
+      # =====================================
       # Verify Resources
-      ##########################################################
+      # =====================================
+
       - name: Verify Resources
         run: |
           kubectl get pods -n $NAMESPACE
           kubectl get svc -n $NAMESPACE
-          kubectl get ingress -n $NAMESPACE || true
