@@ -13,9 +13,13 @@ from app.metrics import (
     PREDICTION_LATENCY,
     MODEL_ACCURACY,
     DATA_DRIFT_SCORE,
+    DATA_DRIFT_DETECTED,
+    SCHEMA_DRIFT_DETECTED,
+    refresh_drift_metrics,
 )
 from app.schema import FraudRequest
 from app.predict import predict_fraud
+from model.detect_data_drift import detect_data_drift
 
 app = FastAPI(
     title="Fraud Detection API",
@@ -89,6 +93,20 @@ def predict(request: FraudRequest):
         )
 
     }
+
+
+############################################################
+# Data Drift Detection
+############################################################
+
+@app.post("/drift")
+def run_drift_detection():
+
+    result = detect_data_drift()
+
+    refresh_drift_metrics()
+
+    return result
 
 ############################################################
 # Prometheus Metrics
