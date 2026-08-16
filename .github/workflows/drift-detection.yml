@@ -1,0 +1,75 @@
+name: Fraud Data Drift Detection
+
+on:
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+
+  drift-detection:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # =====================================
+      # Checkout
+      # =====================================
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+
+      # =====================================
+      # Python
+      # =====================================
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+
+      # =====================================
+      # Dependencies
+      # =====================================
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+
+      # =====================================
+      # Detect Drift
+      # =====================================
+
+      - name: Detect Data Drift
+        run: |
+          python model/detect_data_drift.py
+
+
+      # =====================================
+      # Display Result
+      # =====================================
+
+      - name: Display Drift Report
+        run: |
+          cat artifacts/data_drift.json
+          echo ""
+          cat artifacts/drift_report.json
+
+
+      # =====================================
+      # Upload Drift Reports
+      # =====================================
+
+      - name: Upload Drift Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-reports
+          path: |
+            artifacts/data_drift.json
+            artifacts/drift_report.json
