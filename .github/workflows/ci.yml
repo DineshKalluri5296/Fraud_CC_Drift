@@ -1,21 +1,23 @@
 name: Fraud Detection CI
 
 on:
-
   workflow_dispatch:
- 
+
 env:
   PYTHON_VERSION: "3.11"
 
 jobs:
-  test:
+
+  build:
 
     runs-on: ubuntu-latest
+
     steps:
 
       # =====================================
       # Checkout Repository
       # =====================================
+
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
@@ -25,6 +27,7 @@ jobs:
       # =====================================
       # Setup Python
       # =====================================
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -34,6 +37,7 @@ jobs:
       # =====================================
       # Install Dependencies
       # =====================================
+
       - name: Install Dependencies
         run: |
 
@@ -41,9 +45,11 @@ jobs:
 
           pip install -r requirements.txt
 
+
       # =====================================
       # Configure AWS Credentials
       # =====================================
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
@@ -51,239 +57,209 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+
       # =====================================
       # Verify AWS
       # =====================================
+
       - name: Verify AWS
         run: |
+
           aws sts get-caller-identity
+
 
       # =====================================
       # Check Model in S3
       # =====================================
-      - name: Check Model in S3
 
+      - name: Check Model in S3
         id: model
         run: |
-          if aws s3 ls \
-          s3://${{ secrets.MODEL_BUCKET }}/model/model.pkl \
-          > /dev/null 2>&1
 
+          if aws s3 ls \
+            s3://${{ secrets.MODEL_BUCKET }}/model/model.pkl \
+            > /dev/null 2>&1
           then
 
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+
+            echo "Model exists in S3"
 
           else
 
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+
+            echo "Model does not exist in S3"
 
           fi
+
 
       # =====================================
       # Download Existing Model
       # =====================================
-      - name: Download Model
 
+      - name: Download Existing Model
         if: steps.model.outputs.exists == 'true'
         run: |
+
+          echo "Downloading existing model from S3..."
+
           mkdir -p model
+
           aws s3 cp \
-          s3://${{ secrets.MODEL_BUCKET }}/model/model.pkl \
-          model/model.pkl
+            s3://${{ secrets.MODEL_BUCKET }}/model/model.pkl \
+            model/model.pkl
 
+          ls -lh model/model.pkl
 
 
       # =====================================
-      # First Model Training
+      # Train First Model
       # =====================================
+
       - name: Train First Model
         if: steps.model.outputs.exists == 'false'
         run: |
+
+          echo "No model found in S3."
+          echo "Training first model..."
+
           python model/train.py
+
 
       # =====================================
       # Evaluate First Model
       # =====================================
+
       - name: Evaluate First Model
         if: steps.model.outputs.exists == 'false'
         run: |
-            python model/evaluate.py
+
+          python model/evaluate.py
+
 
       # =====================================
-      # Upload First Model
+      # Upload First Model to S3
       # =====================================
+
       - name: Upload First Model
         if: steps.model.outputs.exists == 'false'
         run: |
-            aws s3 cp model/model.pkl "s3://${{ secrets.MODEL_BUCKET }}/model/model.pkl"
 
-      # ===================================== 
-      # Data Drift Detection
-      # =====================================
-      - name: Detect Data Drift
-        if: steps.model.outputs.exists == 'true'
-        run: |
-          python model/detect_data_drift.py
+          echo "Uploading trained model to S3..."
 
-      # =====================================
-      # Check Data Drift
-      # =====================================
-      - name: Check Data Drift Status
-        id: drift
-        if: steps.model.outputs.exists == 'true'
-        run: |
-           python <<EOF
-           import json
-           import os
+          aws s3 cp \
+            model/model.pkl \
+            s3://${{ secrets.MODEL_BUCKET }}/model/model.pkl
 
-           with open("artifacts/data_drift.json") as f:
-               result = json.load(f)
-           output = os.environ["GITHUB_OUTPUT"]
-
-           with open(output, "a") as g:
-              if result["data_drift_detected"]:
-                 print("Data drift detected")
-                 g.write("drift=true\n")
-              else:
-                 print("No data drift detected")
-                 g.write("drift=false\n")
-           EOF
-      # =====================================
-      # Retrain Model
-      # =====================================
-      - name: Retrain Model
-        if: steps.drift.outputs.drift == 'true'
-        run: |
-          python model/train.py
-
-      # =====================================
-      # Evaluate Retrained Model
-      # =====================================
-      - name: Evaluate Retrained Model
-        if: steps.drift.outputs.drift == 'true'
-        run: |
-          python model/evaluate.py
-
-      # =====================================
-      # Upload Retrained Model
-      # =====================================
-      - name: Upload Retrained Model
-        if: steps.drift.outputs.drift == 'true'
-        run: aws s3 cp model/model.pkl s3://${{ secrets.MODEL_BUCKET }}/model/model.pkl
-
-      # =====================================
-      # Upload Drift Reports
-      # =====================================
-      - name: Upload Drift Reports
-
-        if: always() && steps.model.outputs.exists == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: drift-reports
-          path: |
-            artifacts/data_drift.json
 
       # =====================================
       # Verify Model
       # =====================================
+
       - name: Verify Model
         run: |
-          ls -R
+
           if [ -f model/model.pkl ]; then
-            echo "Model exists"
+
+            echo "Model is available."
+
+            ls -lh model/model.pkl
+
           else
-             echo "Model not found"
-             exit 1
+
+            echo "ERROR: model/model.pkl not found."
+
+            exit 1
+
           fi
+
 
       # =====================================
       # Run Tests
       # =====================================
-      - name: Run Tests with Coverage
 
+      - name: Run Tests
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
 
           pytest tests \
-          --cov=app \
-          --cov=model \
-          --cov-report=xml \
-          --cov-report=term
+            --cov=app \
+            --cov=model \
+            --cov-report=xml \
+            --cov-report=term
+
 
       # =====================================
       # SonarQube Scan
       # =====================================
-      - name: SonarQube Scan
 
+      - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-      # =====================================
-      # Sonar Quality Gate
-      # =====================================
-      - name: SonarQube Quality Gate
 
+      # =====================================
+      # SonarQube Quality Gate
+      # =====================================
+
+      - name: SonarQube Quality Gate
         uses: SonarSource/sonarqube-quality-gate-action@v1.2.0
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
+
       # =====================================
       # Upload Coverage
       # =====================================
-      - name: Upload Coverage
 
+      - name: Upload Coverage
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage.xml
 
-      # =====================================
-      # Upload Test Results
-      # =====================================
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: |
-            .pytest_cache
-            coverage.xml
 
       # =====================================
-      # Login ECR
+      # Login to ECR
       # =====================================
+
       - name: Login to Amazon ECR
         id: login
         uses: aws-actions/amazon-ecr-login@v2
 
+
       # =====================================
       # Build Docker Image
       # =====================================
-      - name: Build Docker Image
 
+      - name: Build Docker Image
         env:
           REGISTRY: ${{ steps.login.outputs.registry }}
         run: |
 
           docker build \
-          -f docker/Dockerfile \
-          -t $REGISTRY/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }} \
-          -t $REGISTRY/${{ secrets.ECR_REPOSITORY }}:latest \
-          .
+            -f docker/Dockerfile \
+            -t $REGISTRY/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }} \
+            -t $REGISTRY/${{ secrets.ECR_REPOSITORY }}:latest \
+            .
+
+
       # =====================================
       # Push Docker Image
       # =====================================
-      - name: Push Docker Image
 
+      - name: Push Docker Image
         env:
           REGISTRY: ${{ steps.login.outputs.registry }}
         run: |
-          docker push \
-          $REGISTRY/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
 
           docker push \
-          $REGISTRY/${{ secrets.ECR_REPOSITORY }}:latest
+            $REGISTRY/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
+
+          docker push \
+            $REGISTRY/${{ secrets.ECR_REPOSITORY }}:latest
