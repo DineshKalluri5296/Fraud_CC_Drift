@@ -11,13 +11,29 @@ from prometheus_client import (
     Histogram,
 )
 
+
+# ==========================================================
+# Base Directory
+# ==========================================================
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+
 # ==========================================================
 # Artifact Files
 # ==========================================================
 
-METRICS_FILE = Path("artifacts/evaluation.json")
-DATA_DRIFT_FILE = Path("artifacts/data_drift.json")
-DRIFT_REPORT_FILE = Path("artifacts/drift_report.json")
+METRICS_FILE = (
+    BASE_DIR / "artifacts" / "evaluation.json"
+)
+
+DATA_DRIFT_FILE = (
+    BASE_DIR / "artifacts" / "data_drift.json"
+)
+
+DRIFT_REPORT_FILE = (
+    BASE_DIR / "artifacts" / "drift_report.json"
+)
 
 
 # ==========================================================
@@ -46,7 +62,7 @@ NON_FRAUD_PREDICTIONS = Counter(
 
 
 # ==========================================================
-# Latency
+# Prediction Latency
 # ==========================================================
 
 PREDICTION_LATENCY = Histogram(
@@ -93,7 +109,7 @@ MODEL_F1_SCORE = Gauge(
 
 
 # ==========================================================
-# Drift Metrics
+# Data Drift Metrics
 # ==========================================================
 
 DATA_DRIFT_SCORE = Gauge(
@@ -111,8 +127,9 @@ SCHEMA_DRIFT_DETECTED = Gauge(
     "Whether schema drift was detected"
 )
 
+
 # ==========================================================
-# Helper Functions
+# Update Model Metrics
 # ==========================================================
 
 def update_model_metrics(metrics: dict):
@@ -137,17 +154,14 @@ def update_model_metrics(metrics: dict):
     )
 
 
-def update_drift_metrics(data_drift: float):
-    """
-    Update statistical data drift score.
-    """
-
-    DATA_DRIFT_SCORE.set(data_drift)
-
+# ==========================================================
+# Load Model Metrics
+# ==========================================================
 
 def load_model_metrics():
     """
-    Load model evaluation metrics from evaluation.json.
+    Load model evaluation metrics
+    from artifacts/evaluation.json.
     """
 
     if not METRICS_FILE.exists():
@@ -156,48 +170,88 @@ def load_model_metrics():
 
         return
 
-    with open(METRICS_FILE, "r") as file:
+    try:
 
-        metrics = json.load(file)
+        with open(
+            METRICS_FILE,
+            "r"
+        ) as file:
 
-    update_model_metrics(metrics)
+            metrics = json.load(file)
 
+        update_model_metrics(metrics)
+
+    except (
+        json.JSONDecodeError,
+        OSError
+    ):
+
+        update_model_metrics({})
+
+
+# ==========================================================
+# Load Data Drift Status
+# ==========================================================
 
 def load_data_drift_status():
+    """
+    Load data drift and schema drift
+    status from data_drift.json.
+    """
 
     if not DATA_DRIFT_FILE.exists():
 
         DATA_DRIFT_DETECTED.set(0)
+
         SCHEMA_DRIFT_DETECTED.set(0)
 
         return
 
-    with open(DATA_DRIFT_FILE, "r") as file:
+    try:
 
-        drift = json.load(file)
+        with open(
+            DATA_DRIFT_FILE,
+            "r"
+        ) as file:
 
-    detected = drift.get(
-        "data_drift_detected",
-        False
-    )
+            drift = json.load(file)
 
-    drift_type = drift.get(
-        "drift_type",
-        ""
-    )
+        detected = drift.get(
+            "data_drift_detected",
+            False
+        )
 
-    DATA_DRIFT_DETECTED.set(
-        1 if detected else 0
-    )
+        drift_type = drift.get(
+            "drift_type",
+            ""
+        )
 
-    SCHEMA_DRIFT_DETECTED.set(
-        1 if drift_type == "schema_drift" else 0
-    )
-    
+        DATA_DRIFT_DETECTED.set(
+            1 if detected else 0
+        )
+
+        SCHEMA_DRIFT_DETECTED.set(
+            1 if drift_type == "schema_drift" else 0
+        )
+
+    except (
+        json.JSONDecodeError,
+        OSError
+    ):
+
+        DATA_DRIFT_DETECTED.set(0)
+
+        SCHEMA_DRIFT_DETECTED.set(0)
+
+
+# ==========================================================
+# Load Data Drift Score
+# ==========================================================
 
 def load_drift_score():
     """
-    Load statistical drift score from drift_report.json.
+    Load overall data drift score
+    from artifacts/drift_report.json.
     """
 
     if not DRIFT_REPORT_FILE.exists():
@@ -206,20 +260,51 @@ def load_drift_score():
 
         return
 
-    with open(DRIFT_REPORT_FILE, "r") as file:
+    try:
 
-        drift_report = json.load(file)
+        with open(
+            DRIFT_REPORT_FILE,
+            "r"
+        ) as file:
 
-    DATA_DRIFT_SCORE.set(
-        drift_report.get(
+            drift_report = json.load(file)
+
+        drift_score = drift_report.get(
             "overall_drift_score",
             0
         )
-    )
+
+        DATA_DRIFT_SCORE.set(
+            float(drift_score)
+        )
+
+    except (
+        json.JSONDecodeError,
+        OSError,
+        TypeError,
+        ValueError
+    ):
+
+        DATA_DRIFT_SCORE.set(0)
 
 
 # ==========================================================
-# Load Metrics at Application Startup
+# Refresh Drift Metrics
+# ==========================================================
+
+def refresh_drift_metrics():
+    """
+    Refresh drift-related Prometheus metrics
+    after running data drift detection.
+    """
+
+    load_data_drift_status()
+
+    load_drift_score()
+
+
+# ==========================================================
+# Application Startup
 # ==========================================================
 
 load_model_metrics()
@@ -227,12 +312,3 @@ load_model_metrics()
 load_data_drift_status()
 
 load_drift_score()
-
-
-def refresh_drift_metrics():
-
-    load_data_drift_status()
-
-    load_drift_score()
-
-
