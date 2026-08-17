@@ -21,8 +21,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Dataset Paths
 # ==========================================================
 
-REFERENCE_DATA = BASE_DIR / "data" / "reference_data.csv"
-CURRENT_DATA = BASE_DIR / "data" / "current_data.csv"
+REFERENCE_DATA = BASE_DIR / "data" / "reference.csv"
+CURRENT_DATA = BASE_DIR / "data" / "current.csv"
 
 
 # ==========================================================
