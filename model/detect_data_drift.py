@@ -1,457 +1,428 @@
 """
-Data Drift Detection for Fraud Detection Model.
-
-Uses:
-    - Schema comparison
-    - Kolmogorov-Smirnov (KS) test
-
-Outputs:
-    - artifacts/data_drift.json
-    - artifacts/drift_report.json
+Data Drift Detection for Fraud Detection Model
 """
 
 import json
 from pathlib import Path
 
 import pandas as pd
-from pandas.errors import EmptyDataError
 from scipy.stats import ks_2samp
+from pandas.errors import EmptyDataError
 
 
 # ==========================================================
-# Project Paths
+# Base Directory
 # ==========================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-REFERENCE_DATA = (
-    BASE_DIR / "data" / "reference.csv"
-)
 
-CURRENT_DATA = (
-    BASE_DIR / "data" / "current.csv"
-)
+# ==========================================================
+# Dataset Paths
+# ==========================================================
 
-ARTIFACTS_DIR = (
-    BASE_DIR / "artifacts"
-)
+REFERENCE_DATA = BASE_DIR / "data" / "reference_data.csv"
+CURRENT_DATA = BASE_DIR / "data" / "current_data.csv"
 
-DATA_DRIFT_OUTPUT = (
-    ARTIFACTS_DIR / "data_drift.json"
-)
 
-DRIFT_REPORT_OUTPUT = (
+# ==========================================================
+# Output Paths
+# ==========================================================
+
+ARTIFACTS_DIR = BASE_DIR / "artifacts"
+
+DRIFT_REPORT_FILE = (
     ARTIFACTS_DIR / "drift_report.json"
 )
 
-
-# ==========================================================
-# Drift Configuration
-# ==========================================================
-
-P_VALUE_THRESHOLD = 0.05
-
-KS_THRESHOLD = 0.01
-
-
-# Create artifacts directory
-ARTIFACTS_DIR.mkdir(
-    parents=True,
-    exist_ok=True
+DATA_DRIFT_FILE = (
+    ARTIFACTS_DIR / "data_drift.json"
 )
 
 
 # ==========================================================
-# JSON Helper
+# Configuration
 # ==========================================================
 
-def save_json(path: Path, data: dict):
-    """
-    Save dictionary as formatted JSON.
-    """
+P_VALUE_THRESHOLD = 0.05
+KS_THRESHOLD = 0.1
 
-    with open(
-        path,
-        "w"
-    ) as file:
+TARGET_COLUMN = "fraud"
 
-        json.dump(
-            data,
-            file,
-            indent=4
-        )
+DATASET_VALIDATION = "Dataset validation"
 
 
 # ==========================================================
-# Data Drift Detection
+# Dataset Loading
 # ==========================================================
 
-def detect_data_drift():
+def load_datasets():
     """
-    Detect schema and statistical data drift.
+    Load reference and current datasets.
 
     Returns:
-        dict: Data drift report.
+        tuple: Reference dataframe, current dataframe, error type.
     """
 
-    # ======================================================
-    # Load Datasets
-    # ======================================================
-
     try:
-
-        ref = pd.read_csv(
+        reference_data = pd.read_csv(
             REFERENCE_DATA
         )
 
-        cur = pd.read_csv(
+        current_data = pd.read_csv(
             CURRENT_DATA
         )
 
-    except FileNotFoundError as error:
-
-        report = {
-            "data_drift_detected": True,
-            "drift_type": "missing_dataset",
-            "missing_columns": [],
-            "extra_columns": [],
-            "overall_drift_score": 1.0,
-            "threshold": KS_THRESHOLD,
-            "method": "Dataset validation",
-            "recommendation": (
-                "Reference or current dataset "
-                "is missing."
-            )
-        }
-
-        save_json(
-            DATA_DRIFT_OUTPUT,
-            report
+        return (
+            reference_data,
+            current_data,
+            None
         )
 
-        save_json(
-            DRIFT_REPORT_OUTPUT,
-            report
+    except FileNotFoundError:
+        return (
+            None,
+            None,
+            "missing_dataset"
         )
-
-        print(
-            f"Dataset error: {error}"
-        )
-
-        print(
-            json.dumps(
-                report,
-                indent=4
-            )
-        )
-
-        return report
 
     except EmptyDataError:
-
-        report = {
-            "data_drift_detected": True,
-            "drift_type": "empty_dataset",
-            "missing_columns": [],
-            "extra_columns": [],
-            "overall_drift_score": 1.0,
-            "threshold": KS_THRESHOLD,
-            "method": "Dataset validation",
-            "recommendation": (
-                "Reference or current dataset "
-                "is empty."
-            )
-        }
-
-        save_json(
-            DATA_DRIFT_OUTPUT,
-            report
+        return (
+            None,
+            None,
+            "empty_dataset"
         )
 
-        save_json(
-            DRIFT_REPORT_OUTPUT,
-            report
+
+# ==========================================================
+# Dataset Validation
+# ==========================================================
+
+def build_dataset_validation_report(
+    validation_type
+):
+    """
+    Build report for invalid datasets.
+    """
+
+    return {
+        "data_drift_detected": True,
+        "drift_type": validation_type,
+        "missing_columns": []
+    }
+
+
+def validate_datasets(
+    reference_data,
+    current_data
+):
+    """
+    Validate reference and current datasets.
+
+    Returns:
+        dict or None: Validation report when invalid.
+    """
+
+    if reference_data is None or current_data is None:
+        return None
+
+    if reference_data.empty or current_data.empty:
+        return build_dataset_validation_report(
+            "empty_dataset"
         )
 
-        print(
-            json.dumps(
-                report,
-                indent=4
-            )
-        )
+    return None
 
-        return report
 
-    # ======================================================
-    # Empty DataFrame Check
-    # ======================================================
+# ==========================================================
+# Schema Validation
+# ==========================================================
 
-    if ref.empty or cur.empty:
+def get_schema_differences(
+    reference_data,
+    current_data
+):
+    """
+    Identify missing and extra columns.
+    """
 
-        report = {
-            "data_drift_detected": True,
-            "drift_type": "empty_dataset",
-            "missing_columns": [],
-            "extra_columns": [],
-            "overall_drift_score": 1.0,
-            "threshold": KS_THRESHOLD,
-            "method": "Dataset validation",
-            "recommendation": (
-                "Reference or current dataset "
-                "contains no records."
-            )
-        }
-
-        save_json(
-            DATA_DRIFT_OUTPUT,
-            report
-        )
-
-        save_json(
-            DRIFT_REPORT_OUTPUT,
-            report
-        )
-
-        print(
-            json.dumps(
-                report,
-                indent=4
-            )
-        )
-
-        return report
-
-    # ======================================================
-    # Schema Drift Detection
-    # ======================================================
-
-    ref_columns = set(
-        ref.columns
+    reference_columns = set(
+        reference_data.columns
     )
 
-    cur_columns = set(
-        cur.columns
+    current_columns = set(
+        current_data.columns
     )
 
     missing_columns = sorted(
-        ref_columns - cur_columns
+        reference_columns - current_columns
     )
 
     extra_columns = sorted(
-        cur_columns - ref_columns
+        current_columns - reference_columns
     )
 
-    # ======================================================
-    # Schema Drift
-    # ======================================================
+    return (
+        missing_columns,
+        extra_columns
+    )
 
-    if missing_columns or extra_columns:
 
-        report = {
+def build_schema_drift_report(
+    missing_columns,
+    extra_columns
+):
+    """
+    Build schema drift report.
+    """
 
-            "report_date":
-                pd.Timestamp.utcnow().isoformat(),
+    return {
+        "report_date":
+            pd.Timestamp.utcnow().isoformat(),
 
-            "drift_detected": True,
+        "drift_detected": True,
 
-            "data_drift_detected": True,
+        "data_drift_detected": True,
 
-            "drift_type": "schema_drift",
+        "drift_type": "schema_drift",
 
-            "missing_columns":
-                missing_columns,
+        "missing_columns":
+            missing_columns,
 
-            "extra_columns":
-                extra_columns,
+        "extra_columns":
+            extra_columns,
 
-            "overall_drift_score": 1.0,
+        "overall_drift_score": 0.0,
 
-            "threshold": KS_THRESHOLD,
+        "features": {},
 
-            "method":
-                "Schema comparison",
+        "recommendation":
+            "Retraining may be required."
+    }
 
-            "recommendation": (
-                "Schema drift detected. "
-                "Review missing or extra columns "
-                "before using the dataset for "
-                "model inference."
-            )
+
+# ==========================================================
+# Feature Validation
+# ==========================================================
+
+def is_numeric_feature(
+    reference_values,
+    current_values
+):
+    """
+    Check whether both feature columns are numeric.
+    """
+
+    return (
+        pd.api.types.is_numeric_dtype(
+            reference_values
+        )
+        and
+        pd.api.types.is_numeric_dtype(
+            current_values
+        )
+    )
+
+
+def clean_feature_values(
+    reference_values,
+    current_values
+):
+    """
+    Remove missing values from feature data.
+    """
+
+    reference_values = (
+        reference_values
+        .dropna()
+    )
+
+    current_values = (
+        current_values
+        .dropna()
+    )
+
+    return (
+        reference_values,
+        current_values
+    )
+
+
+# ==========================================================
+# Statistical Drift Analysis
+# ==========================================================
+
+def analyze_feature(
+    reference_values,
+    current_values
+):
+    """
+    Perform KS test for one feature.
+
+    Returns:
+        dict or None: Feature drift result.
+    """
+
+    if not is_numeric_feature(
+        reference_values,
+        current_values
+    ):
+        return None
+
+    (
+        reference_values,
+        current_values
+    ) = clean_feature_values(
+        reference_values,
+        current_values
+    )
+
+    if (
+        reference_values.empty
+        or current_values.empty
+    ):
+        return {
+            "ks_statistic": None,
+            "p_value": None,
+            "drift": False,
+            "status": "insufficient_data"
         }
 
-        save_json(
-            DATA_DRIFT_OUTPUT,
-            report
+    statistic, p_value = ks_2samp(
+        reference_values,
+        current_values
+    )
+
+    column_drift = (
+        p_value < P_VALUE_THRESHOLD
+        and statistic > KS_THRESHOLD
+    )
+
+    return {
+        "ks_statistic": round(
+            statistic,
+            6
+        ),
+
+        "p_value": round(
+            p_value,
+            6
+        ),
+
+        "drift": column_drift,
+
+        "status": (
+            "drift_detected"
+            if column_drift
+            else "no_drift"
         )
+    }
 
-        save_json(
-            DRIFT_REPORT_OUTPUT,
-            report
-        )
 
-        print(
-            json.dumps(
-                report,
-                indent=4
-            )
-        )
+# ==========================================================
+# Feature Analysis
+# ==========================================================
 
-        return report
+def get_common_columns(
+    reference_data,
+    current_data
+):
+    """
+    Return columns available in both datasets.
+    """
 
-    # ======================================================
-    # Statistical Drift Detection
-    # ======================================================
+    return [
+        column
+        for column in reference_data.columns
+        if column in current_data.columns
+    ]
+
+
+def analyze_features(
+    reference_data,
+    current_data
+):
+    """
+    Analyze all common numeric features.
+    """
 
     feature_report = {}
-
+    drift_scores = []
     drift_detected = False
 
-    drift_scores = []
-
-    # Use common columns only
-    common_columns = [
-        column
-        for column in ref.columns
-        if column in cur.columns
-    ]
+    common_columns = get_common_columns(
+        reference_data,
+        current_data
+    )
 
     for column in common_columns:
 
-        # Skip target column
-        if column == "fraud":
+        if column == TARGET_COLUMN:
             continue
 
-        # --------------------------------------------------
-        # Numeric Feature Validation
-        # --------------------------------------------------
+        result = analyze_feature(
+            reference_data[column],
+            current_data[column]
+        )
 
-        if not (
-            pd.api.types.is_numeric_dtype(
-                ref[column]
-            )
-            and
-            pd.api.types.is_numeric_dtype(
-                cur[column]
-            )
-        ):
-
-            feature_report[column] = {
-                "ks_statistic": None,
-                "p_value": None,
-                "drift": False,
-                "status": "skipped_non_numeric"
-            }
-
+        if result is None:
             continue
 
-        # --------------------------------------------------
-        # Remove Missing Values
-        # --------------------------------------------------
+        feature_report[column] = result
 
-        reference_values = (
-            ref[column]
-            .dropna()
+        statistic = result.get(
+            "ks_statistic"
         )
 
-        current_values = (
-            cur[column]
-            .dropna()
-        )
+        if statistic is not None:
+            drift_scores.append(
+                statistic
+            )
 
-        # --------------------------------------------------
-        # Empty Column Check
-        # --------------------------------------------------
-
-        if (
-            reference_values.empty
-            or current_values.empty
-        ):
-
-            feature_report[column] = {
-                "ks_statistic": None,
-                "p_value": None,
-                "drift": True,
-                "status": "empty_column"
-            }
-
+        if result.get("drift", False):
             drift_detected = True
 
-            drift_scores.append(1.0)
+    return (
+        feature_report,
+        drift_scores,
+        drift_detected
+    )
 
-            continue
 
-        # --------------------------------------------------
-        # KS Test
-        # --------------------------------------------------
+# ==========================================================
+# Overall Drift Score
+# ==========================================================
 
-        statistic, p_value = ks_2samp(
-            reference_values,
-            current_values
-        )
+def calculate_overall_drift_score(
+    drift_scores
+):
+    """
+    Calculate average KS statistic.
+    """
 
-        statistic = float(
-            statistic
-        )
+    if not drift_scores:
+        return 0.0
 
-        p_value = float(
-            p_value
-        )
+    return (
+        sum(drift_scores)
+        / len(drift_scores)
+    )
 
-        # --------------------------------------------------
-        # Drift Decision
-        # --------------------------------------------------
 
-        column_drift = (
-            p_value < P_VALUE_THRESHOLD
-            and statistic > KS_THRESHOLD
-        )
+# ==========================================================
+# Final Report
+# ==========================================================
 
-        feature_report[column] = {
+def build_final_report(
+    drift_detected,
+    overall_drift_score,
+    feature_report
+):
+    """
+    Build final statistical drift report.
+    """
 
-            "ks_statistic":
-                round(statistic, 6),
-
-            "p_value":
-                round(p_value, 6),
-
-            "drift":
-                column_drift,
-
-            "status":
-                "drift_detected"
-                if column_drift
-                else "no_drift"
-        }
-
-        drift_scores.append(
-            statistic
-        )
-
-        if column_drift:
-
-            drift_detected = True
-
-    # ======================================================
-    # Overall Drift Score
-    # ======================================================
-
-    if drift_scores:
-
-        overall_drift_score = (
-            sum(drift_scores)
-            / len(drift_scores)
-        )
-
-    else:
-
-        overall_drift_score = 0.0
-
-    # ======================================================
-    # Final Report
-    # ======================================================
-
-    final_report = {
-
+    return {
         "report_date":
             pd.Timestamp.utcnow().isoformat(),
 
@@ -470,17 +441,8 @@ def detect_data_drift():
         "overall_drift_score":
             round(
                 overall_drift_score,
-                4
+                6
             ),
-
-        "p_value_threshold":
-            P_VALUE_THRESHOLD,
-
-        "ks_threshold":
-            KS_THRESHOLD,
-
-        "method":
-            "Kolmogorov-Smirnov Test",
 
         "features":
             feature_report,
@@ -488,43 +450,152 @@ def detect_data_drift():
         "recommendation": (
             "Retraining may be required."
             if drift_detected
-            else
-            "No retraining required."
+            else "No retraining required."
         )
     }
 
-    # ======================================================
-    # Save Reports
-    # ======================================================
 
-    save_json(
-        DATA_DRIFT_OUTPUT,
-        final_report
+# ==========================================================
+# Save Report
+# ==========================================================
+
+def save_drift_report(report):
+    """
+    Save drift report to artifacts directory.
+    """
+
+    ARTIFACTS_DIR.mkdir(
+        parents=True,
+        exist_ok=True
     )
 
-    save_json(
-        DRIFT_REPORT_OUTPUT,
-        final_report
-    )
+    with open(
+        DRIFT_REPORT_FILE,
+        "w",
+        encoding="utf-8"
+    ) as file:
 
-    # ======================================================
-    # Console Output
-    # ======================================================
-
-    print(
-        json.dumps(
-            final_report,
+        json.dump(
+            report,
+            file,
             indent=4
         )
-    )
 
-    return final_report
+
+def save_data_drift_status(report):
+    """
+    Save simplified data drift status.
+    """
+
+    status = {
+        "data_drift_detected":
+            report.get(
+                "data_drift_detected",
+                False
+            ),
+
+        "drift_type":
+            report.get(
+                "drift_type",
+                "no_drift"
+            )
+    }
+
+    with open(
+        DATA_DRIFT_FILE,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
+        json.dump(
+            status,
+            file,
+            indent=4
+        )
 
 
 # ==========================================================
-# Script Entry Point
+# Main Data Drift Detection
+# ==========================================================
+
+def detect_data_drift():
+    """
+    Detect schema and statistical data drift.
+
+    Returns:
+        dict: Data drift report.
+    """
+
+    (
+        reference_data,
+        current_data,
+        load_error
+    ) = load_datasets()
+
+    if load_error:
+        return build_dataset_validation_report(
+            load_error
+        )
+
+    validation_report = validate_datasets(
+        reference_data,
+        current_data
+    )
+
+    if validation_report:
+        return validation_report
+
+    (
+        missing_columns,
+        extra_columns
+    ) = get_schema_differences(
+        reference_data,
+        current_data
+    )
+
+    if missing_columns or extra_columns:
+        return build_schema_drift_report(
+            missing_columns,
+            extra_columns
+        )
+
+    (
+        feature_report,
+        drift_scores,
+        drift_detected
+    ) = analyze_features(
+        reference_data,
+        current_data
+    )
+
+    overall_drift_score = (
+        calculate_overall_drift_score(
+            drift_scores
+        )
+    )
+
+    return build_final_report(
+        drift_detected,
+        overall_drift_score,
+        feature_report
+    )
+
+
+# ==========================================================
+# Run Detection
 # ==========================================================
 
 if __name__ == "__main__":
 
-    detect_data_drift()
+    report = detect_data_drift()
+
+    save_drift_report(report)
+
+    save_data_drift_status(report)
+
+    print(
+        json.dumps(
+            report,
+            indent=4
+        )
+    )
