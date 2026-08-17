@@ -1,6 +1,7 @@
 name: Fraud Data Drift Detection
 
 on:
+
   push:
     paths:
       - "data/current.csv"
@@ -42,13 +43,12 @@ jobs:
 
       - name: Verify Dataset
         run: |
+
           echo "======================================"
           echo "VERIFYING DATASETS"
           echo "======================================"
 
           find data -type f -name "*.csv" -print
-
-          echo ""
 
           test -f data/reference.csv
           test -f data/current.csv
@@ -63,7 +63,9 @@ jobs:
 
       - name: Install Dependencies
         run: |
+
           python -m pip install --upgrade pip
+
           pip install -r requirements.txt
 
 
@@ -73,15 +75,17 @@ jobs:
 
       - name: Create Artifacts Directory
         run: |
+
           mkdir -p artifacts
 
 
       # =====================================
-      # Detect Data Drift
+      # Detect Drift
       # =====================================
 
       - name: Detect Data Drift
         run: |
+
           python model/detect_data_drift.py
 
 
@@ -91,6 +95,7 @@ jobs:
 
       - name: Display Drift Report
         run: |
+
           echo "======================================"
           echo "DATA DRIFT RESULT"
           echo "======================================"
@@ -125,10 +130,9 @@ jobs:
 
               report = json.load(f)
 
-
-          # =====================================
+          # -------------------------------------
           # Drift Score
-          # =====================================
+          # -------------------------------------
 
           drift_score = float(
               report.get(
@@ -137,10 +141,9 @@ jobs:
               )
           )
 
-
-          # =====================================
+          # -------------------------------------
           # Overall Drift
-          # =====================================
+          # -------------------------------------
 
           drift_detected = int(
               bool(
@@ -151,10 +154,9 @@ jobs:
               )
           )
 
-
-          # =====================================
+          # -------------------------------------
           # Data Drift
-          # =====================================
+          # -------------------------------------
 
           data_drift_detected = int(
               bool(
@@ -165,10 +167,9 @@ jobs:
               )
           )
 
-
-          # =====================================
+          # -------------------------------------
           # Schema Drift
-          # =====================================
+          # -------------------------------------
 
           schema_drift_detected = int(
               report.get(
@@ -177,10 +178,9 @@ jobs:
               ) == "schema_drift"
           )
 
-
-          # =====================================
-          # Create Prometheus Metrics
-          # =====================================
+          # -------------------------------------
+          # Create Prometheus file
+          # -------------------------------------
 
           with open(
               "artifacts/drift_metrics.txt",
@@ -198,9 +198,9 @@ jobs:
               )
 
               f.write(
-                  f"fraud_data_drift_score {drift_score}\n"
+                  f"fraud_data_drift_score "
+                  f"{drift_score}\n"
               )
-
 
               f.write(
                   "# HELP fraud_data_drift_detected "
@@ -216,7 +216,6 @@ jobs:
                   f"{data_drift_detected}\n"
               )
 
-
               f.write(
                   "# HELP fraud_schema_drift_detected "
                   "Whether schema drift was detected.\n"
@@ -230,7 +229,6 @@ jobs:
                   f"fraud_schema_drift_detected "
                   f"{schema_drift_detected}\n"
               )
-
 
               f.write(
                   "# HELP fraud_drift_detected "
@@ -246,14 +244,13 @@ jobs:
                   f"{drift_detected}\n"
               )
 
-
-          print("")
           print("======================================")
-          print("GENERATED PROMETHEUS METRICS")
+          print("PROMETHEUS METRICS")
           print("======================================")
 
           print(
-              f"fraud_data_drift_score {drift_score}"
+              f"fraud_data_drift_score "
+              f"{drift_score}"
           )
 
           print(
@@ -299,8 +296,11 @@ jobs:
         run: |
 
           if [ -z "$PUSHGATEWAY_URL" ]; then
+
             echo "ERROR: PUSHGATEWAY_URL secret is missing."
+
             exit 1
+
           fi
 
           echo "======================================"
@@ -321,7 +321,7 @@ jobs:
 
 
       # =====================================
-      # PUSH LATEST METRICS
+      # PUSH / REPLACE METRIC GROUP
       # =====================================
 
       - name: Push Latest Drift Metrics
@@ -335,19 +335,12 @@ jobs:
           echo "======================================"
 
           echo ""
-          echo "Metrics being pushed:"
-          echo ""
 
           cat artifacts/drift_metrics.txt
 
           echo ""
 
-          echo "Pushgateway:"
-          echo "$PUSHGATEWAY_URL"
-
-          echo ""
-
-          echo "Sending metrics..."
+          echo "Sending metrics to Pushgateway..."
 
           HTTP_CODE=$(curl \
             -L \
@@ -363,8 +356,6 @@ jobs:
 
           echo "PUSH HTTP STATUS: $HTTP_CODE"
 
-          echo ""
-
           cat /tmp/push_response.txt || true
 
           echo ""
@@ -378,13 +369,11 @@ jobs:
 
           fi
 
-          echo "======================================"
-          echo "PUSH SUCCESSFUL"
-          echo "======================================"
+          echo "Latest metrics pushed successfully."
 
 
       # =====================================
-      # VERIFY EXACT JOB METRICS
+      # VERIFY PUSHGATEWAY
       # =====================================
 
       - name: Verify Latest Pushgateway Metrics
@@ -407,30 +396,27 @@ jobs:
 
           echo ""
 
-          echo "======================================"
-          echo "FRAUD-DRIFT METRICS"
-          echo "======================================"
+          echo "Current Pushgateway fraud metrics:"
+          echo ""
 
-          echo "$RESPONSE" | grep \
-            'job="fraud-drift"' || true
+          echo "$RESPONSE" | grep -E \
+            "fraud_data_drift_score|fraud_data_drift_detected|fraud_schema_drift_detected|fraud_drift_detected"
 
           echo ""
 
           echo "======================================"
-          echo "EXPECTED METRICS"
+          echo "EXPECTED VALUES"
           echo "======================================"
 
           cat artifacts/drift_metrics.txt
 
           echo ""
 
-          echo "======================================"
-          echo "VERIFICATION COMPLETE"
-          echo "======================================"
+          echo "Pushgateway verification completed successfully."
 
 
       # =====================================
-      # Upload Drift Reports
+      # Upload Artifacts
       # =====================================
 
       - name: Upload Drift Reports
@@ -441,6 +427,7 @@ jobs:
           name: drift-reports
 
           path: |
+
             artifacts/data_drift.json
             artifacts/drift_report.json
             artifacts/drift_metrics.txt
