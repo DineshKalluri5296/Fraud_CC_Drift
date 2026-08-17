@@ -235,7 +235,7 @@ def load_data_drift_status():
         )
 
     except (
-        json.JSONDecodeError,
+        # json.JSONDecodeError,
         OSError
     ):
 
@@ -279,7 +279,7 @@ def load_drift_score():
         )
 
     except (
-        json.JSONDecodeError,
+        # json.JSONDecodeError,
         OSError,
         TypeError,
         ValueError
