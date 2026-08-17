@@ -1,6 +1,10 @@
 name: Fraud Data Drift Detection
 
 on:
+  push:
+    paths:
+      - "data/current.csv"
+
   workflow_dispatch:
 
 env:
@@ -15,11 +19,47 @@ jobs:
     steps:
 
       # =====================================
-      # Checkout
+      # Checkout Repository
       # =====================================
 
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+
+      # =====================================
+      # Debug Repository / Dataset
+      # =====================================
+
+      - name: Check Dataset Files
+        run: |
+          echo "======================================"
+          echo "Current working directory"
+          echo "======================================"
+          pwd
+
+          echo ""
+          echo "======================================"
+          echo "Repository files"
+          echo "======================================"
+          find . -type f | sort
+
+          echo ""
+          echo "======================================"
+          echo "Data directory"
+          echo "======================================"
+          ls -lah data || true
+
+          echo ""
+          echo "======================================"
+          echo "Checking current.csv"
+          echo "======================================"
+          if [ -f "data/current.csv" ]; then
+            echo "current.csv FOUND"
+            ls -lh data/current.csv
+          else
+            echo "ERROR: data/current.csv NOT FOUND"
+            exit 1
+          fi
 
 
       # =====================================
@@ -43,6 +83,15 @@ jobs:
 
 
       # =====================================
+      # Create Artifacts Directory
+      # =====================================
+
+      - name: Create Artifacts Directory
+        run: |
+          mkdir -p artifacts
+
+
+      # =====================================
       # Detect Drift
       # =====================================
 
@@ -52,14 +101,33 @@ jobs:
 
 
       # =====================================
-      # Display Result
+      # Display Drift Result
       # =====================================
 
       - name: Display Drift Report
         run: |
-          cat artifacts/data_drift.json
+          echo "======================================"
+          echo "DATA DRIFT RESULT"
+          echo "======================================"
+
+          if [ -f "artifacts/data_drift.json" ]; then
+            cat artifacts/data_drift.json
+          else
+            echo "ERROR: data_drift.json not found"
+            exit 1
+          fi
+
           echo ""
-          cat artifacts/drift_report.json
+          echo "======================================"
+          echo "DRIFT REPORT"
+          echo "======================================"
+
+          if [ -f "artifacts/drift_report.json" ]; then
+            cat artifacts/drift_report.json
+          else
+            echo "ERROR: drift_report.json not found"
+            exit 1
+          fi
 
 
       # =====================================
