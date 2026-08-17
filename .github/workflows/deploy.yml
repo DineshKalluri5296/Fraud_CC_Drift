@@ -106,7 +106,7 @@ jobs:
         run: |
 
           helm upgrade --install $HELM_RELEASE \
-            ./helm/fraud-chart \
+            ./heml/fraud-chart \
             --namespace $NAMESPACE \
             --set image.repository=821656895219.dkr.ecr.us-east-1.amazonaws.com/frauddetectioncc \
             --set image.tag=latest
