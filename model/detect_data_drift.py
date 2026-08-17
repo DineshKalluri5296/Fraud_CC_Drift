@@ -31,13 +31,8 @@ CURRENT_DATA = BASE_DIR / "data" / "current.csv"
 
 ARTIFACTS_DIR = BASE_DIR / "artifacts"
 
-DRIFT_REPORT_FILE = (
-    ARTIFACTS_DIR / "drift_report.json"
-)
-
-DATA_DRIFT_FILE = (
-    ARTIFACTS_DIR / "data_drift.json"
-)
+DRIFT_REPORT_FILE = ARTIFACTS_DIR / "drift_report.json"
+DATA_DRIFT_FILE = ARTIFACTS_DIR / "data_drift.json"
 
 
 # ==========================================================
@@ -65,57 +60,41 @@ def load_datasets():
     """
 
     try:
-        reference_data = pd.read_csv(
-            REFERENCE_DATA
-        )
+        reference_data = pd.read_csv(REFERENCE_DATA)
+        current_data = pd.read_csv(CURRENT_DATA)
 
-        current_data = pd.read_csv(
-            CURRENT_DATA
-        )
-
-        return (
-            reference_data,
-            current_data,
-            None
-        )
+        return reference_data, current_data, None
 
     except FileNotFoundError:
-        return (
-            None,
-            None,
-            "missing_dataset"
-        )
+        return None, None, "missing_dataset"
 
     except EmptyDataError:
-        return (
-            None,
-            None,
-            "empty_dataset"
-        )
+        return None, None, "empty_dataset"
 
 
 # ==========================================================
 # Dataset Validation
 # ==========================================================
 
-def build_dataset_validation_report(
-    validation_type
-):
+def build_dataset_validation_report(validation_type):
     """
     Build report for invalid datasets.
     """
 
     return {
+        "report_date": pd.Timestamp.now("UTC").isoformat(),
+        "drift_detected": True,
         "data_drift_detected": True,
         "drift_type": validation_type,
-        "missing_columns": []
+        "missing_columns": [],
+        "extra_columns": [],
+        "overall_drift_score": 0.0,
+        "features": {},
+        "recommendation": "Retraining may be required.",
     }
 
 
-def validate_datasets(
-    reference_data,
-    current_data
-):
+def validate_datasets(reference_data, current_data):
     """
     Validate reference and current datasets.
 
@@ -127,9 +106,7 @@ def validate_datasets(
         return None
 
     if reference_data.empty or current_data.empty:
-        return build_dataset_validation_report(
-            "empty_dataset"
-        )
+        return build_dataset_validation_report("empty_dataset")
 
     return None
 
@@ -138,66 +115,35 @@ def validate_datasets(
 # Schema Validation
 # ==========================================================
 
-def get_schema_differences(
-    reference_data,
-    current_data
-):
+def get_schema_differences(reference_data, current_data):
     """
     Identify missing and extra columns.
     """
 
-    reference_columns = set(
-        reference_data.columns
-    )
+    reference_columns = set(reference_data.columns)
+    current_columns = set(current_data.columns)
 
-    current_columns = set(
-        current_data.columns
-    )
+    missing_columns = sorted(reference_columns - current_columns)
+    extra_columns = sorted(current_columns - reference_columns)
 
-    missing_columns = sorted(
-        reference_columns - current_columns
-    )
-
-    extra_columns = sorted(
-        current_columns - reference_columns
-    )
-
-    return (
-        missing_columns,
-        extra_columns
-    )
+    return missing_columns, extra_columns
 
 
-def build_schema_drift_report(
-    missing_columns,
-    extra_columns
-):
+def build_schema_drift_report(missing_columns, extra_columns):
     """
     Build schema drift report.
     """
 
     return {
-        "report_date":
-            pd.Timestamp.utcnow().isoformat(),
-
+        "report_date": pd.Timestamp.now("UTC").isoformat(),
         "drift_detected": True,
-
         "data_drift_detected": True,
-
         "drift_type": "schema_drift",
-
-        "missing_columns":
-            missing_columns,
-
-        "extra_columns":
-            extra_columns,
-
+        "missing_columns": missing_columns,
+        "extra_columns": extra_columns,
         "overall_drift_score": 0.0,
-
         "features": {},
-
-        "recommendation":
-            "Retraining may be required."
+        "recommendation": "Retraining may be required.",
     }
 
 
@@ -205,57 +151,33 @@ def build_schema_drift_report(
 # Feature Validation
 # ==========================================================
 
-def is_numeric_feature(
-    reference_values,
-    current_values
-):
+def is_numeric_feature(reference_values, current_values):
     """
     Check whether both feature columns are numeric.
     """
 
     return (
-        pd.api.types.is_numeric_dtype(
-            reference_values
-        )
-        and
-        pd.api.types.is_numeric_dtype(
-            current_values
-        )
+        pd.api.types.is_numeric_dtype(reference_values)
+        and pd.api.types.is_numeric_dtype(current_values)
     )
 
 
-def clean_feature_values(
-    reference_values,
-    current_values
-):
+def clean_feature_values(reference_values, current_values):
     """
     Remove missing values from feature data.
     """
 
-    reference_values = (
-        reference_values
-        .dropna()
-    )
+    reference_values = reference_values.dropna()
+    current_values = current_values.dropna()
 
-    current_values = (
-        current_values
-        .dropna()
-    )
-
-    return (
-        reference_values,
-        current_values
-    )
+    return reference_values, current_values
 
 
 # ==========================================================
 # Statistical Drift Analysis
 # ==========================================================
 
-def analyze_feature(
-    reference_values,
-    current_values
-):
+def analyze_feature(reference_values, current_values):
     """
     Perform KS test for one feature.
 
@@ -263,59 +185,42 @@ def analyze_feature(
         dict or None: Feature drift result.
     """
 
-    if not is_numeric_feature(
-        reference_values,
-        current_values
-    ):
+    if not is_numeric_feature(reference_values, current_values):
         return None
 
-    (
+    reference_values, current_values = clean_feature_values(
         reference_values,
-        current_values
-    ) = clean_feature_values(
-        reference_values,
-        current_values
+        current_values,
     )
 
-    if (
-        reference_values.empty
-        or current_values.empty
-    ):
+    if reference_values.empty or current_values.empty:
         return {
             "ks_statistic": None,
             "p_value": None,
             "drift": False,
-            "status": "insufficient_data"
+            "status": "insufficient_data",
         }
 
     statistic, p_value = ks_2samp(
         reference_values,
-        current_values
+        current_values,
     )
 
-    column_drift = (
+    # Explicitly convert NumPy/SciPy boolean to native Python bool.
+    column_drift = bool(
         p_value < P_VALUE_THRESHOLD
         and statistic > KS_THRESHOLD
     )
 
     return {
-        "ks_statistic": round(
-            statistic,
-            6
-        ),
-
-        "p_value": round(
-            p_value,
-            6
-        ),
-
+        "ks_statistic": round(float(statistic), 6),
+        "p_value": round(float(p_value), 6),
         "drift": column_drift,
-
         "status": (
             "drift_detected"
             if column_drift
             else "no_drift"
-        )
+        ),
     }
 
 
@@ -323,10 +228,7 @@ def analyze_feature(
 # Feature Analysis
 # ==========================================================
 
-def get_common_columns(
-    reference_data,
-    current_data
-):
+def get_common_columns(reference_data, current_data):
     """
     Return columns available in both datasets.
     """
@@ -338,10 +240,7 @@ def get_common_columns(
     ]
 
 
-def analyze_features(
-    reference_data,
-    current_data
-):
+def analyze_features(reference_data, current_data):
     """
     Analyze all common numeric features.
     """
@@ -352,7 +251,7 @@ def analyze_features(
 
     common_columns = get_common_columns(
         reference_data,
-        current_data
+        current_data,
     )
 
     for column in common_columns:
@@ -362,7 +261,7 @@ def analyze_features(
 
         result = analyze_feature(
             reference_data[column],
-            current_data[column]
+            current_data[column],
         )
 
         if result is None:
@@ -370,32 +269,22 @@ def analyze_features(
 
         feature_report[column] = result
 
-        statistic = result.get(
-            "ks_statistic"
-        )
+        statistic = result.get("ks_statistic")
 
         if statistic is not None:
-            drift_scores.append(
-                statistic
-            )
+            drift_scores.append(float(statistic))
 
         if result.get("drift", False):
             drift_detected = True
 
-    return (
-        feature_report,
-        drift_scores,
-        drift_detected
-    )
+    return feature_report, drift_scores, bool(drift_detected)
 
 
 # ==========================================================
 # Overall Drift Score
 # ==========================================================
 
-def calculate_overall_drift_score(
-    drift_scores
-):
+def calculate_overall_drift_score(drift_scores):
     """
     Calculate average KS statistic.
     """
@@ -403,10 +292,7 @@ def calculate_overall_drift_score(
     if not drift_scores:
         return 0.0
 
-    return (
-        sum(drift_scores)
-        / len(drift_scores)
-    )
+    return float(sum(drift_scores) / len(drift_scores))
 
 
 # ==========================================================
@@ -416,21 +302,20 @@ def calculate_overall_drift_score(
 def build_final_report(
     drift_detected,
     overall_drift_score,
-    feature_report
+    feature_report,
 ):
     """
     Build final statistical drift report.
     """
 
+    drift_detected = bool(drift_detected)
+
     return {
-        "report_date":
-            pd.Timestamp.utcnow().isoformat(),
+        "report_date": pd.Timestamp.now("UTC").isoformat(),
 
-        "drift_detected":
-            drift_detected,
+        "drift_detected": drift_detected,
 
-        "data_drift_detected":
-            drift_detected,
+        "data_drift_detected": drift_detected,
 
         "drift_type": (
             "statistical_drift"
@@ -438,21 +323,40 @@ def build_final_report(
             else "no_drift"
         ),
 
-        "overall_drift_score":
-            round(
-                overall_drift_score,
-                6
-            ),
+        "overall_drift_score": round(
+            float(overall_drift_score),
+            6,
+        ),
 
-        "features":
-            feature_report,
+        "features": feature_report,
 
         "recommendation": (
             "Retraining may be required."
             if drift_detected
             else "No retraining required."
-        )
+        ),
     }
+
+
+# ==========================================================
+# JSON Serialization
+# ==========================================================
+
+def json_serializer(obj):
+    """
+    Convert Pandas/NumPy scalar values to JSON-compatible types.
+    """
+
+    if isinstance(obj, pd.Timestamp):
+        return obj.isoformat()
+
+    if hasattr(obj, "item"):
+        return obj.item()
+
+    raise TypeError(
+        f"Object of type {type(obj).__name__} "
+        "is not JSON serializable"
+    )
 
 
 # ==========================================================
@@ -466,19 +370,20 @@ def save_drift_report(report):
 
     ARTIFACTS_DIR.mkdir(
         parents=True,
-        exist_ok=True
+        exist_ok=True,
     )
 
     with open(
         DRIFT_REPORT_FILE,
         "w",
-        encoding="utf-8"
+        encoding="utf-8",
     ) as file:
 
         json.dump(
             report,
             file,
-            indent=4
+            indent=4,
+            default=json_serializer,
         )
 
 
@@ -488,29 +393,30 @@ def save_data_drift_status(report):
     """
 
     status = {
-        "data_drift_detected":
+        "data_drift_detected": bool(
             report.get(
                 "data_drift_detected",
-                False
-            ),
-
-        "drift_type":
-            report.get(
-                "drift_type",
-                "no_drift"
+                False,
             )
+        ),
+
+        "drift_type": report.get(
+            "drift_type",
+            "no_drift",
+        ),
     }
 
     with open(
         DATA_DRIFT_FILE,
         "w",
-        encoding="utf-8"
+        encoding="utf-8",
     ) as file:
 
         json.dump(
             status,
             file,
-            indent=4
+            indent=4,
+            default=json_serializer,
         )
 
 
@@ -526,58 +432,43 @@ def detect_data_drift():
         dict: Data drift report.
     """
 
-    (
-        reference_data,
-        current_data,
-        load_error
-    ) = load_datasets()
+    reference_data, current_data, load_error = load_datasets()
 
     if load_error:
-        return build_dataset_validation_report(
-            load_error
-        )
+        return build_dataset_validation_report(load_error)
 
     validation_report = validate_datasets(
         reference_data,
-        current_data
+        current_data,
     )
 
     if validation_report:
         return validation_report
 
-    (
-        missing_columns,
-        extra_columns
-    ) = get_schema_differences(
+    missing_columns, extra_columns = get_schema_differences(
         reference_data,
-        current_data
+        current_data,
     )
 
     if missing_columns or extra_columns:
         return build_schema_drift_report(
             missing_columns,
-            extra_columns
+            extra_columns,
         )
 
-    (
-        feature_report,
-        drift_scores,
-        drift_detected
-    ) = analyze_features(
+    feature_report, drift_scores, drift_detected = analyze_features(
         reference_data,
-        current_data
+        current_data,
     )
 
-    overall_drift_score = (
-        calculate_overall_drift_score(
-            drift_scores
-        )
+    overall_drift_score = calculate_overall_drift_score(
+        drift_scores,
     )
 
     return build_final_report(
         drift_detected,
         overall_drift_score,
-        feature_report
+        feature_report,
     )
 
 
@@ -596,6 +487,7 @@ if __name__ == "__main__":
     print(
         json.dumps(
             report,
-            indent=4
+            indent=4,
+            default=json_serializer,
         )
     )
