@@ -8,8 +8,10 @@ on:
 
   workflow_dispatch:
 
+
 env:
   PYTHON_VERSION: "3.11"
+
 
 jobs:
 
@@ -80,11 +82,15 @@ jobs:
 
 
       # =====================================
-      # Detect Drift
+      # Detect Data Drift
       # =====================================
 
       - name: Detect Data Drift
         run: |
+
+          echo "======================================"
+          echo "RUNNING DATA DRIFT DETECTION"
+          echo "======================================"
 
           python model/detect_data_drift.py
 
@@ -122,41 +128,33 @@ jobs:
 
           import json
 
+          REPORT_FILE = "artifacts/drift_report.json"
+          METRICS_FILE = "artifacts/drift_metrics.txt"
+
           with open(
-              "artifacts/drift_report.json",
+              REPORT_FILE,
               "r",
               encoding="utf-8"
           ) as f:
 
               report = json.load(f)
 
-          # -------------------------------------
+
+          # =====================================
           # Drift Score
-          # -------------------------------------
+          # =====================================
 
           drift_score = float(
               report.get(
                   "overall_drift_score",
-                  0
+                  0.0
               )
           )
 
-          # -------------------------------------
-          # Overall Drift
-          # -------------------------------------
 
-          drift_detected = int(
-              bool(
-                  report.get(
-                      "drift_detected",
-                      False
-                  )
-              )
-          )
-
-          # -------------------------------------
+          # =====================================
           # Data Drift
-          # -------------------------------------
+          # =====================================
 
           data_drift_detected = int(
               bool(
@@ -167,9 +165,10 @@ jobs:
               )
           )
 
-          # -------------------------------------
+
+          # =====================================
           # Schema Drift
-          # -------------------------------------
+          # =====================================
 
           schema_drift_detected = int(
               report.get(
@@ -178,12 +177,27 @@ jobs:
               ) == "schema_drift"
           )
 
-          # -------------------------------------
-          # Create Prometheus file
-          # -------------------------------------
+
+          # =====================================
+          # Overall Drift
+          # =====================================
+
+          drift_detected = int(
+              bool(
+                  report.get(
+                      "drift_detected",
+                      False
+                  )
+              )
+          )
+
+
+          # =====================================
+          # Create Prometheus Metrics
+          # =====================================
 
           with open(
-              "artifacts/drift_metrics.txt",
+              METRICS_FILE,
               "w",
               encoding="utf-8"
           ) as f:
@@ -202,6 +216,7 @@ jobs:
                   f"{drift_score}\n"
               )
 
+
               f.write(
                   "# HELP fraud_data_drift_detected "
                   "Whether fraud data drift was detected.\n"
@@ -215,6 +230,7 @@ jobs:
                   f"fraud_data_drift_detected "
                   f"{data_drift_detected}\n"
               )
+
 
               f.write(
                   "# HELP fraud_schema_drift_detected "
@@ -230,6 +246,7 @@ jobs:
                   f"{schema_drift_detected}\n"
               )
 
+
               f.write(
                   "# HELP fraud_drift_detected "
                   "Whether any fraud drift was detected.\n"
@@ -244,13 +261,25 @@ jobs:
                   f"{drift_detected}\n"
               )
 
-          print("======================================")
-          print("PROMETHEUS METRICS")
-          print("======================================")
+
+          # =====================================
+          # Display Metrics
+          # =====================================
 
           print(
-              f"fraud_data_drift_score "
-              f"{drift_score}"
+              "======================================"
+          )
+
+          print(
+              "PROMETHEUS METRICS"
+          )
+
+          print(
+              "======================================"
+          )
+
+          print(
+              f"fraud_data_drift_score {drift_score}"
           )
 
           print(
@@ -286,10 +315,10 @@ jobs:
 
 
       # =====================================
-      # Verify Pushgateway
+      # Validate Pushgateway Secret
       # =====================================
 
-      - name: Verify Pushgateway
+      - name: Validate Pushgateway URL
         env:
           PUSHGATEWAY_URL: ${{ secrets.PUSHGATEWAY_URL }}
 
@@ -303,17 +332,33 @@ jobs:
 
           fi
 
+
+          echo "Pushgateway URL configured."
+
+
+      # =====================================
+      # Check Pushgateway
+      # =====================================
+
+      - name: Check Pushgateway
+        env:
+          PUSHGATEWAY_URL: ${{ secrets.PUSHGATEWAY_URL }}
+
+        run: |
+
           echo "======================================"
           echo "CHECKING PUSHGATEWAY"
           echo "======================================"
 
+
           curl \
-            -L \
             --fail-with-body \
-            --retry 3 \
+            --retry 5 \
+            --retry-delay 2 \
             --silent \
             --show-error \
             "${PUSHGATEWAY_URL}/-/ready"
+
 
           echo ""
 
@@ -321,7 +366,7 @@ jobs:
 
 
       # =====================================
-      # PUSH / REPLACE METRIC GROUP
+      # Push Latest Metrics
       # =====================================
 
       - name: Push Latest Drift Metrics
@@ -334,31 +379,48 @@ jobs:
           echo "PUSHING LATEST DRIFT METRICS"
           echo "======================================"
 
+
+          echo ""
+          echo "Metrics:"
           echo ""
 
           cat artifacts/drift_metrics.txt
 
-          echo ""
 
-          echo "Sending metrics to Pushgateway..."
+          echo ""
+          echo "======================================"
+          echo "PUT REQUEST"
+          echo "======================================"
+
 
           HTTP_CODE=$(curl \
-            -L \
             --silent \
             --show-error \
-            --output /tmp/push_response.txt \
+            --output /tmp/pushgateway_response.txt \
             --write-out "%{http_code}" \
             --request PUT \
+            --header "Content-Type: text/plain; version=0.0.4" \
             --data-binary @artifacts/drift_metrics.txt \
             "${PUSHGATEWAY_URL}/metrics/job/fraud-drift")
 
-          echo ""
-
-          echo "PUSH HTTP STATUS: $HTTP_CODE"
-
-          cat /tmp/push_response.txt || true
 
           echo ""
+
+          echo "Pushgateway HTTP status: $HTTP_CODE"
+
+
+          if [ -s /tmp/pushgateway_response.txt ]; then
+
+            echo ""
+            echo "Pushgateway response:"
+
+            cat /tmp/pushgateway_response.txt
+
+          fi
+
+
+          echo ""
+
 
           if [ "$HTTP_CODE" -lt 200 ] || \
              [ "$HTTP_CODE" -ge 300 ]; then
@@ -369,11 +431,12 @@ jobs:
 
           fi
 
-          echo "Latest metrics pushed successfully."
+
+          echo "Metrics pushed successfully."
 
 
       # =====================================
-      # VERIFY PUSHGATEWAY
+      # Verify Latest Metrics
       # =====================================
 
       - name: Verify Latest Pushgateway Metrics
@@ -386,21 +449,91 @@ jobs:
           echo "VERIFYING PUSHGATEWAY"
           echo "======================================"
 
+
           RESPONSE=$(curl \
-            -L \
             --fail-with-body \
-            --retry 3 \
+            --retry 5 \
+            --retry-delay 2 \
             --silent \
             --show-error \
             "${PUSHGATEWAY_URL}/metrics")
 
+
           echo ""
 
-          echo "Current Pushgateway fraud metrics:"
-          echo ""
+          echo "======================================"
+          echo "FRAUD METRICS IN PUSHGATEWAY"
+          echo "======================================"
+
 
           echo "$RESPONSE" | grep -E \
-            "fraud_data_drift_score|fraud_data_drift_detected|fraud_schema_drift_detected|fraud_drift_detected"
+            'fraud_data_drift_score|fraud_data_drift_detected|fraud_schema_drift_detected|fraud_drift_detected' \
+            || true
+
+
+          # =====================================
+          # Expected Values
+          # =====================================
+
+          EXPECTED_SCORE=$(grep \
+            '^fraud_data_drift_score ' \
+            artifacts/drift_metrics.txt | \
+            awk '{print $2}')
+
+
+          EXPECTED_DATA_DRIFT=$(grep \
+            '^fraud_data_drift_detected ' \
+            artifacts/drift_metrics.txt | \
+            awk '{print $2}')
+
+
+          EXPECTED_SCHEMA_DRIFT=$(grep \
+            '^fraud_schema_drift_detected ' \
+            artifacts/drift_metrics.txt | \
+            awk '{print $2}')
+
+
+          EXPECTED_DRIFT=$(grep \
+            '^fraud_drift_detected ' \
+            artifacts/drift_metrics.txt | \
+            awk '{print $2}')
+
+
+          # =====================================
+          # Actual Values
+          # =====================================
+
+          ACTUAL_SCORE=$(echo "$RESPONSE" | \
+            grep 'fraud_data_drift_score{' | \
+            grep 'job="fraud-drift"' | \
+            awk '{print $2}' | \
+            tail -1)
+
+
+          ACTUAL_DATA_DRIFT=$(echo "$RESPONSE" | \
+            grep 'fraud_data_drift_detected{' | \
+            grep 'job="fraud-drift"' | \
+            awk '{print $2}' | \
+            tail -1)
+
+
+          ACTUAL_SCHEMA_DRIFT=$(echo "$RESPONSE" | \
+            grep 'fraud_schema_drift_detected{' | \
+            grep 'job="fraud-drift"' | \
+            awk '{print $2}' | \
+            tail -1)
+
+
+          ACTUAL_DRIFT=$(echo "$RESPONSE" | \
+            grep 'fraud_drift_detected{' | \
+            grep 'job="fraud-drift"' | \
+            awk '{print $2}' | \
+            tail -1)
+
+
+          # =====================================
+          # Display Expected
+          # =====================================
 
           echo ""
 
@@ -408,11 +541,100 @@ jobs:
           echo "EXPECTED VALUES"
           echo "======================================"
 
-          cat artifacts/drift_metrics.txt
+
+          echo "Drift Score        : $EXPECTED_SCORE"
+
+          echo "Data Drift         : $EXPECTED_DATA_DRIFT"
+
+          echo "Schema Drift       : $EXPECTED_SCHEMA_DRIFT"
+
+          echo "Overall Drift      : $EXPECTED_DRIFT"
+
+
+          # =====================================
+          # Display Actual
+          # =====================================
 
           echo ""
 
-          echo "Pushgateway verification completed successfully."
+          echo "======================================"
+          echo "ACTUAL VALUES"
+          echo "======================================"
+
+
+          echo "Drift Score        : $ACTUAL_SCORE"
+
+          echo "Data Drift         : $ACTUAL_DATA_DRIFT"
+
+          echo "Schema Drift       : $ACTUAL_SCHEMA_DRIFT"
+
+          echo "Overall Drift      : $ACTUAL_DRIFT"
+
+
+          # =====================================
+          # Validate Values
+          # =====================================
+
+          echo ""
+
+          echo "======================================"
+          echo "VALIDATING"
+          echo "======================================"
+
+
+          if [ -z "$ACTUAL_SCORE" ]; then
+
+            echo "ERROR: fraud_data_drift_score not found."
+
+            exit 1
+
+          fi
+
+
+          if [ "$EXPECTED_SCORE" != "$ACTUAL_SCORE" ]; then
+
+            echo "ERROR: Drift score mismatch."
+
+            exit 1
+
+          fi
+
+
+          if [ "$EXPECTED_DATA_DRIFT" != "$ACTUAL_DATA_DRIFT" ]; then
+
+            echo "ERROR: Data drift mismatch."
+
+            exit 1
+
+          fi
+
+
+          if [ "$EXPECTED_SCHEMA_DRIFT" != "$ACTUAL_SCHEMA_DRIFT" ]; then
+
+            echo "ERROR: Schema drift mismatch."
+
+            exit 1
+
+          fi
+
+
+          if [ "$EXPECTED_DRIFT" != "$ACTUAL_DRIFT" ]; then
+
+            echo "ERROR: Overall drift mismatch."
+
+            exit 1
+
+          fi
+
+
+          echo ""
+
+          echo "======================================"
+          echo "SUCCESS"
+          echo "======================================"
+
+
+          echo "Pushgateway contains the latest metrics."
 
 
       # =====================================
