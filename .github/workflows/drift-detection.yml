@@ -1,10 +1,13 @@
 name: Fraud Data Drift Detection
 
 on:
+
+  # Automatically run when current dataset changes
   push:
     paths:
       - "data/current.csv"
 
+  # Allow manual execution from GitHub Actions
   workflow_dispatch:
 
 env:
@@ -27,43 +30,7 @@ jobs:
 
 
       # =====================================
-      # Debug Repository / Dataset
-      # =====================================
-
-      - name: Check Dataset Files
-        run: |
-          echo "======================================"
-          echo "Current working directory"
-          echo "======================================"
-          pwd
-
-          echo ""
-          echo "======================================"
-          echo "Repository files"
-          echo "======================================"
-          find . -type f | sort
-
-          echo ""
-          echo "======================================"
-          echo "Data directory"
-          echo "======================================"
-          ls -lah data || true
-
-          echo ""
-          echo "======================================"
-          echo "Checking current.csv"
-          echo "======================================"
-          if [ -f "data/current.csv" ]; then
-            echo "current.csv FOUND"
-            ls -lh data/current.csv
-          else
-            echo "ERROR: data/current.csv NOT FOUND"
-            exit 1
-          fi
-
-
-      # =====================================
-      # Python
+      # Setup Python
       # =====================================
 
       - name: Setup Python
@@ -73,7 +40,29 @@ jobs:
 
 
       # =====================================
-      # Dependencies
+      # Verify Dataset
+      # =====================================
+
+      - name: Verify Dataset
+        run: |
+          echo "======================================"
+          echo "CSV FILES"
+          echo "======================================"
+
+          find data -type f -name "*.csv" -print
+
+          echo ""
+          echo "Checking required files..."
+
+          test -f data/reference.csv
+          test -f data/current.csv
+
+          echo "reference.csv FOUND"
+          echo "current.csv FOUND"
+
+
+      # =====================================
+      # Install Dependencies
       # =====================================
 
       - name: Install Dependencies
@@ -92,7 +81,7 @@ jobs:
 
 
       # =====================================
-      # Detect Drift
+      # Detect Data / Schema Drift
       # =====================================
 
       - name: Detect Data Drift
@@ -101,33 +90,170 @@ jobs:
 
 
       # =====================================
-      # Display Drift Result
+      # Display Drift Report
       # =====================================
 
       - name: Display Drift Report
         run: |
+
           echo "======================================"
           echo "DATA DRIFT RESULT"
           echo "======================================"
 
-          if [ -f "artifacts/data_drift.json" ]; then
-            cat artifacts/data_drift.json
-          else
-            echo "ERROR: data_drift.json not found"
-            exit 1
-          fi
+          cat artifacts/data_drift.json
 
           echo ""
           echo "======================================"
-          echo "DRIFT REPORT"
+          echo "FULL DRIFT REPORT"
           echo "======================================"
 
-          if [ -f "artifacts/drift_report.json" ]; then
-            cat artifacts/drift_report.json
-          else
-            echo "ERROR: drift_report.json not found"
+          cat artifacts/drift_report.json
+
+
+      # =====================================
+      # Convert Drift Result to Prometheus
+      # =====================================
+
+      - name: Prepare Prometheus Metrics
+        run: |
+
+          python - <<'PY'
+          import json
+
+          with open("artifacts/drift_report.json") as f:
+              report = json.load(f)
+
+          # Overall drift score
+          drift_score = float(
+              report.get("overall_drift_score", 0)
+          )
+
+          # Overall drift status
+          drift_detected = 1 if report.get(
+              "drift_detected", False
+          ) else 0
+
+          # Schema drift status
+          schema_drift_detected = 1 if report.get(
+              "drift_type"
+          ) == "schema_drift" else 0
+
+          # Data/statistical drift
+          data_drift_detected = 1 if report.get(
+              "data_drift_detected", False
+          ) else 0
+
+          print("======================================")
+          print("PROMETHEUS METRICS")
+          print("======================================")
+
+          print(f"data_drift_score={drift_score}")
+          print(f"data_drift_detected={data_drift_detected}")
+          print(f"schema_drift_detected={schema_drift_detected}")
+          print(f"drift_detected={drift_detected}")
+
+          # Save metrics
+          with open("artifacts/drift_metrics.txt", "w") as f:
+
+              f.write(
+                  "# HELP fraud_data_drift_score "
+                  "Overall fraud dataset drift score.\n"
+              )
+
+              f.write(
+                  "# TYPE fraud_data_drift_score gauge\n"
+              )
+
+              f.write(
+                  f"fraud_data_drift_score "
+                  f"{drift_score}\n"
+              )
+
+              f.write(
+                  "# HELP fraud_data_drift_detected "
+                  "Whether fraud data drift was detected.\n"
+              )
+
+              f.write(
+                  "# TYPE fraud_data_drift_detected gauge\n"
+              )
+
+              f.write(
+                  f"fraud_data_drift_detected "
+                  f"{data_drift_detected}\n"
+              )
+
+              f.write(
+                  "# HELP fraud_schema_drift_detected "
+                  "Whether fraud schema drift was detected.\n"
+              )
+
+              f.write(
+                  "# TYPE fraud_schema_drift_detected gauge\n"
+              )
+
+              f.write(
+                  f"fraud_schema_drift_detected "
+                  f"{schema_drift_detected}\n"
+              )
+
+              f.write(
+                  "# HELP fraud_drift_detected "
+                  "Whether any fraud drift was detected.\n"
+              )
+
+              f.write(
+                  "# TYPE fraud_drift_detected gauge\n"
+              )
+
+              f.write(
+                  f"fraud_drift_detected "
+                  f"{drift_detected}\n"
+              )
+
+          print("")
+          print("Metrics file created:")
+          print("artifacts/drift_metrics.txt")
+          PY
+
+
+      # =====================================
+      # Display Prometheus Metrics
+      # =====================================
+
+      - name: Display Prometheus Metrics
+        run: |
+          echo "======================================"
+          echo "PROMETHEUS METRICS"
+          echo "======================================"
+
+          cat artifacts/drift_metrics.txt
+
+
+      # =====================================
+      # Push Metrics to Pushgateway
+      # =====================================
+
+      - name: Push Drift Metrics to Pushgateway
+        env:
+          PUSHGATEWAY_URL: ${{ secrets.PUSHGATEWAY_URL }}
+
+        run: |
+
+          if [ -z "$PUSHGATEWAY_URL" ]; then
+            echo "ERROR: PUSHGATEWAY_URL secret is not configured."
             exit 1
           fi
+
+          echo "Pushing drift metrics to Pushgateway..."
+
+          curl --fail-with-body \
+            --retry 3 \
+            --data-binary @artifacts/drift_metrics.txt \
+            "${PUSHGATEWAY_URL}/metrics/job/fraud-drift"
+
+          echo ""
+          echo "Drift metrics successfully pushed."
 
 
       # =====================================
@@ -141,3 +267,4 @@ jobs:
           path: |
             artifacts/data_drift.json
             artifacts/drift_report.json
+            artifacts/drift_metrics.txt
